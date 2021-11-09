@@ -1,6 +1,6 @@
 use crate::{com::WeakPtr, Blob, D3DResult, Error, TextureAddressMode};
 use std::{fmt, mem, ops::Range};
-use windows::Win32::Graphics::{Direct3D12, Dxgi};
+use windows::Win32::Graphics::{Direct3D11, Direct3D12, Dxgi};
 
 pub type CpuDescriptor = Direct3D12::D3D12_CPU_DESCRIPTOR_HANDLE;
 pub type GpuDescriptor = Direct3D12::D3D12_GPU_DESCRIPTOR_HANDLE;
@@ -278,15 +278,15 @@ pub type RootSignature = WeakPtr<Direct3D12::ID3D12RootSignature>;
 pub type BlobResult = D3DResult<(Blob, Error)>;
 
 #[cfg(feature = "libloading")]
-impl crate::Direct3D12Lib {
+impl crate::D3D12Lib {
     pub fn serialize_root_signature(
         &self,
         version: RootSignatureVersion,
-        parameters: &[RootParameter],
+        parameters: &mut [RootParameter],
         static_samplers: &[StaticSampler],
         flags: RootSignatureFlags,
     ) -> Result<BlobResult, libloading::Error> {
-        use Dxgi::ID3DBlob;
+        use Direct3D11::ID3DBlob;
         type Fun = extern "system" fn(
             *const Direct3D12::D3D12_ROOT_SIGNATURE_DESC,
             Direct3D12::D3D_ROOT_SIGNATURE_VERSION,
@@ -296,10 +296,10 @@ impl crate::Direct3D12Lib {
 
         let desc = Direct3D12::D3D12_ROOT_SIGNATURE_DESC {
             NumParameters: parameters.len() as _,
-            pParameters: parameters.as_ptr() as *const _,
+            pParameters: parameters.as_mut_ptr() as *mut _,
             NumStaticSamplers: static_samplers.len() as _,
             pStaticSamplers: static_samplers.as_ptr() as _,
-            Flags: flags.bits(),
+            Flags: Direct3D12::D3D12_ROOT_SIGNATURE_FLAGS(flags.bits()),
         };
 
         let mut blob = Blob::null();
@@ -309,13 +309,13 @@ impl crate::Direct3D12Lib {
                 self.lib.get(b"Direct3D12SerializeRootSignature")?;
             func(
                 &desc,
-                version as _,
+                Direct3D12::D3D_ROOT_SIGNATURE_VERSION(version as _),
                 blob.mut_void() as *mut *mut _,
                 error.mut_void() as *mut *mut _,
             )
         };
 
-        Ok(((blob, error), hr))
+        Ok(((blob, error), hr.ok()))
     }
 }
 
@@ -323,31 +323,42 @@ impl RootSignature {
     #[cfg(feature = "implicit-link")]
     pub fn serialize(
         version: RootSignatureVersion,
-        parameters: &[RootParameter],
+        parameters: &mut [RootParameter],
         static_samplers: &[StaticSampler],
         flags: RootSignatureFlags,
     ) -> BlobResult {
-        let mut blob = Blob::null();
-        let mut error = Error::null();
-
         let desc = Direct3D12::D3D12_ROOT_SIGNATURE_DESC {
             NumParameters: parameters.len() as _,
-            pParameters: parameters.as_ptr() as *const _,
+            pParameters: parameters.as_mut_ptr() as *mut _,
             NumStaticSamplers: static_samplers.len() as _,
             pStaticSamplers: static_samplers.as_ptr() as _,
-            Flags: flags.bits(),
+            Flags: Direct3D12::D3D12_ROOT_SIGNATURE_FLAGS(flags.bits()),
         };
 
+        let mut blob: Option<Direct3D11::ID3DBlob> = None;
+        let mut error: Option<Direct3D11::ID3DBlob> = None;
         let hr = unsafe {
             Direct3D12::D3D12SerializeRootSignature(
                 &desc,
-                version as _,
-                blob.mut_void() as *mut *mut _,
-                error.mut_void() as *mut *mut _,
+                Direct3D12::D3D_ROOT_SIGNATURE_VERSION(version as _),
+                &mut blob,
+                &mut error,
             )
         };
 
-        ((blob, error), hr)
+        if let Ok(_) = hr {
+            let wk_blob = match blob {
+                Some(mut blob) => unsafe { WeakPtr::from_raw(&mut blob) },
+                None => WeakPtr::<Direct3D11::ID3DBlob>::null(),
+            };
+            let wk_err = match error {
+                Some(mut err) => unsafe { WeakPtr::from_raw(&mut err) },
+                None => WeakPtr::<Direct3D11::ID3DBlob>::null(),
+            };
+            ((wk_blob, wk_err), Ok(()))
+        } else {
+            ((WeakPtr::null(), WeakPtr::null()), Err(hr.err().unwrap()))
+        }
     }
 }
 

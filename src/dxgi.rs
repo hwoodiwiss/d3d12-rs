@@ -6,7 +6,7 @@ use windows::{
         Foundation::{self, HWND},
         Graphics::{
             Direct3D12,
-            Dxgi::{self, IDXGIDevice2, IDXGIOutput3},
+            Dxgi::{self, IDXGIDevice2},
         },
     },
 };
@@ -147,14 +147,13 @@ impl Factory2 {
         };
 
         let hr = unsafe {
-            let device: Option<IDXGIDevice2>;
+            let mut device: Option<IDXGIDevice2> = None;
             queue.GetDevice(&mut device);
             let device = device.unwrap();
-            let output: IDXGIOutput3;
-            self.CreateSwapChainForHwnd(device, hwnd, &desc, ptr::null(), output)
+            self.CreateSwapChainForHwnd(device, hwnd, &desc, ptr::null(), None)
         };
 
-        if let Ok(swap_chain) = hr {
+        if let Ok(mut swap_chain) = hr {
             (unsafe { WeakPtr::from_raw(&mut swap_chain) }, Ok(()))
         } else {
             (WeakPtr::null(), Err(hr.err().unwrap()))
@@ -167,7 +166,7 @@ impl Factory4 {
     pub fn create(flags: FactoryCreationFlags) -> D3DResult<Self> {
         let hr = unsafe { Dxgi::CreateDXGIFactory2::<Dxgi::IDXGIFactory4>(flags.bits()) };
 
-        if let Ok(factory) = hr {
+        if let Ok(mut factory) = hr {
             (unsafe { WeakPtr::from_raw(&mut factory) }, Ok(()))
         } else {
             (WeakPtr::null(), Err(hr.err().unwrap()))
@@ -181,7 +180,7 @@ impl Factory4 {
     pub fn enumerate_adapters(&self, id: u32) -> D3DResult<Adapter1> {
         let hr = unsafe { self.EnumAdapters1(id) };
 
-        if let Ok(adapter) = hr {
+        if let Ok(mut adapter) = hr {
             (unsafe { WeakPtr::from_raw(&mut adapter) }, Ok(()))
         } else {
             (WeakPtr::null(), Err(hr.err().unwrap()))
@@ -205,10 +204,9 @@ bitflags! {
 
 impl SwapChain {
     pub fn get_buffer(&self, id: u32) -> D3DResult<Resource> {
-        let mut resource = Resource::null();
         let hr = unsafe { self.GetBuffer::<Direct3D12::ID3D12Resource>(id) };
 
-        if let Ok(resource) = hr {
+        if let Ok(mut resource) = hr {
             (unsafe { WeakPtr::from_raw(&mut resource) }, Ok(()))
         } else {
             (WeakPtr::null(), Err(hr.err().unwrap()))

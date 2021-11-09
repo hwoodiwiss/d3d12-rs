@@ -4,7 +4,7 @@ extern crate bitflags;
 use std::ffi::CStr;
 
 use windows::Win32::Foundation;
-use windows::Win32::Graphics::{Dxgi, Hlsl};
+use windows::Win32::Graphics::Dxgi;
 use windows::{runtime::HRESULT, Win32::Graphics::Direct3D11, Win32::Graphics::Direct3D12};
 
 mod com;
@@ -76,7 +76,7 @@ pub enum FeatureLevel {
 
 pub type Blob = WeakPtr<Direct3D11::ID3DBlob>;
 
-pub type Error = WeakPtr<Hlsl::IDxcBlob>;
+pub type Error = WeakPtr<Direct3D11::ID3DBlob>;
 impl Error {
     pub unsafe fn as_c_str(&self) -> &CStr {
         debug_assert!(!self.is_null());
@@ -87,13 +87,13 @@ impl Error {
 
 #[cfg(feature = "libloading")]
 #[derive(Debug)]
-pub struct Direct3D12Lib {
+pub struct D3D12Lib {
     lib: libloading::Library,
 }
 
 #[cfg(feature = "libloading")]
-impl Direct3D12Lib {
+impl D3D12Lib {
     pub fn new() -> Result<Self, libloading::Error> {
-        unsafe { libloading::Library::new("Direct3D12.dll").map(|lib| Direct3D12Lib { lib }) }
+        unsafe { libloading::Library::new("Direct3D12.dll").map(|lib| D3D12Lib { lib }) }
     }
 }

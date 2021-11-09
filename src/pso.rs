@@ -3,6 +3,7 @@
 use crate::{com::WeakPtr, Blob, D3DResult, Error};
 
 use std::{ops::Deref, ptr};
+use windows::Win32::Graphics::Direct3D11;
 use windows::Win32::Graphics::Direct3D12;
 use windows::Win32::Graphics::Hlsl;
 
@@ -58,8 +59,8 @@ impl Shader {
         entry: &str,
         flags: ShaderCompileFlags,
     ) -> D3DResult<(Blob, Error)> {
-        let mut shader = Blob::null();
-        let mut error = Error::null();
+        let mut shader: Option<Direct3D11::ID3DBlob> = None;
+        let mut error: Option<Direct3D11::ID3DBlob> = None;
 
         let hr = unsafe {
             Hlsl::D3DCompile(
@@ -72,12 +73,24 @@ impl Shader {
                 target,
                 flags.bits(),
                 0,
-                &mut None,
-                &mut None,
+                &mut shader,
+                &mut error,
             )
         };
 
-        ((shader, error), hr)
+        if let Ok(_) = hr {
+            let wk_shader = match shader {
+                Some(mut blob) => unsafe { WeakPtr::from_raw(&mut blob) },
+                None => WeakPtr::<Direct3D11::ID3DBlob>::null(),
+            };
+            let wk_err = match error {
+                Some(mut err) => unsafe { WeakPtr::from_raw(&mut err) },
+                None => WeakPtr::<Direct3D11::ID3DBlob>::null(),
+            };
+            ((wk_shader, wk_err), Ok(()))
+        } else {
+            ((WeakPtr::null(), WeakPtr::null()), Err(hr.err().unwrap()))
+        }
     }
 }
 

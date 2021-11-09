@@ -6,7 +6,7 @@ use windows::Win32::Graphics::Direct3D12;
 pub type Debug = WeakPtr<Direct3D12::ID3D12Debug>;
 
 #[cfg(feature = "libloading")]
-impl crate::Direct3D12Lib {
+impl crate::D3D12Lib {
     pub fn get_debug_interface(&self) -> Result<crate::D3DResult<Debug>, libloading::Error> {
         type Fun =
             extern "system" fn(&runtime::GUID, *mut *mut std::ffi::c_void) -> runtime::Result<()>;
@@ -24,12 +24,14 @@ impl crate::Direct3D12Lib {
 impl Debug {
     #[cfg(feature = "implicit-link")]
     pub fn get_interface() -> crate::D3DResult<Self> {
-        let mut debug = Debug::null();
-        unsafe {
-            let mut debug_opt = &mut Some(*debug.as_ptr());
-            let hr = Direct3D12::D3D12GetDebugInterface(debug_opt);
+        let mut debug: Option<Direct3D12::ID3D12Debug> = None;
 
-            (debug, hr)
+        let hr = unsafe { Direct3D12::D3D12GetDebugInterface(&mut debug) };
+
+        if let Some(mut debug) = debug {
+            (unsafe { WeakPtr::from_raw(&mut debug) }, Ok(()))
+        } else {
+            (WeakPtr::null(), Err(hr.err().unwrap()))
         }
     }
 

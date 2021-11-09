@@ -7,7 +7,7 @@ use crate::{
 };
 use std::{mem, ptr};
 use windows::{
-    runtime,
+    runtime::{self, Interface},
     Win32::Graphics::Direct3D12::{self},
 };
 
@@ -137,7 +137,7 @@ impl ResourceBarrier {
         };
         unsafe {
             *barrier.Anonymous.Transition = Direct3D12::D3D12_RESOURCE_TRANSITION_BARRIER {
-                pResource: Some(*resource.as_ptr()),
+                pResource: Some(resource.0.cast::<Direct3D12::ID3D12Resource>().unwrap()),
                 Subresource: subresource,
                 StateBefore: state_before,
                 StateAfter: state_after,
@@ -171,11 +171,12 @@ impl GraphicsCommandList {
     pub fn discard_resource(&self, resource: Resource, region: DiscardRegion) {
         debug_assert!(region.subregions.start < region.subregions.end);
         unsafe {
+            let rects = region.rects;
             self.DiscardResource(
                 resource,
                 &Direct3D12::D3D12_DISCARD_REGION {
-                    NumRects: region.rects.len() as _,
-                    pRects: region.rects.as_mut_ptr(),
+                    NumRects: rects.len() as _,
+                    pRects: (*rects).as_mut_ptr(),
                     FirstSubresource: region.subregions.start,
                     NumSubresources: region.subregions.end - region.subregions.start - 1,
                 },

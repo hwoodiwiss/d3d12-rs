@@ -7,7 +7,7 @@ use windows::Win32::Graphics::Direct3D12;
 pub type Subresource = u32;
 
 pub struct DiscardRegion<'a> {
-    pub rects: &'a [Rect],
+    pub rects: &'a mut [Rect],
     pub subregions: Range<Subresource>,
 }
 
