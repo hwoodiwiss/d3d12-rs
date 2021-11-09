@@ -55,7 +55,7 @@ impl Device {
         let mut device: Option<Direct3D12::ID3D12Device>;
         let hr = unsafe {
             Direct3D12::D3D12CreateDevice(
-                adapter.as_unknown() as _,
+                adapter.as_unknown(),
                 Direct3D11::D3D_FEATURE_LEVEL(feature_level as _),
                 &mut device,
             )
@@ -171,15 +171,19 @@ impl Device {
         node_mask: NodeMask,
     ) -> D3DResult<GraphicsCommandList> {
         let hr = unsafe {
-            self.CreateCommandList::<Direct3D12::ID3D12GraphicsCommandList>(
+            self.CreateCommandList::<_, _, Direct3D12::ID3D12GraphicsCommandList>(
                 node_mask,
                 Direct3D12::D3D12_COMMAND_LIST_TYPE(list_type as _),
-                &allocator,
-                &initial,
+                allocator,
+                initial,
             )
         };
 
-        (command_list, hr)
+        if let Ok(command_list) = hr {
+            (unsafe { WeakPtr::from_raw(&mut command_list) }, Ok(()))
+        } else {
+            (WeakPtr::null(), Err(hr.err().unwrap()))
+        }
     }
 
     pub fn create_query_heap(
@@ -189,21 +193,19 @@ impl Device {
         node_mask: NodeMask,
     ) -> D3DResult<QueryHeap> {
         let desc = Direct3D12::D3D12_QUERY_HEAP_DESC {
-            Type: heap_ty as _,
+            Type: Direct3D12::D3D12_QUERY_HEAP_TYPE(heap_ty as _),
             Count: count,
             NodeMask: node_mask,
         };
 
-        let mut query_heap = QueryHeap::null();
-        let hr = unsafe {
-            self.CreateQueryHeap(
-                &desc,
-                &Direct3D12::ID3D12QueryHeap::uuidof(),
-                query_heap.mut_void(),
-            )
-        };
+        let mut query_heap: Option<Direct3D12::ID3D12QueryHeap>;
+        let hr = unsafe { self.CreateQueryHeap(&desc, &mut query_heap) };
 
-        (query_heap, hr)
+        if let Some(query_heap) = query_heap {
+            (unsafe { WeakPtr::from_raw(&mut query_heap) }, Ok(()))
+        } else {
+            (WeakPtr::null(), Err(hr.err().unwrap()))
+        }
     }
 
     pub fn create_graphics_pipeline_state(
@@ -231,7 +233,7 @@ impl Device {
     ) -> D3DResult<PipelineState> {
         let mut pipeline = PipelineState::null();
         let desc = Direct3D12::D3D12_COMPUTE_PIPELINE_STATE_DESC {
-            pRootSignature: root_signature.as_mut_ptr(),
+            pRootSignature: Some(root_signature),
             CS: *cs,
             NodeMask: node_mask,
             CachedPSO: *cached_pso,
