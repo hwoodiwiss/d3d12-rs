@@ -1,54 +1,54 @@
 use crate::com::WeakPtr;
-use winapi::um::d3d12;
+use windows::Win32::Graphics::Direct3D12;
 
-pub type Heap = WeakPtr<d3d12::ID3D12Heap>;
+pub type Heap = WeakPtr<Direct3D12::ID3D12Heap>;
 
 #[repr(u32)]
 #[derive(Clone, Copy)]
 pub enum HeapType {
-    Default = d3d12::D3D12_HEAP_TYPE_DEFAULT,
-    Upload = d3d12::D3D12_HEAP_TYPE_UPLOAD,
-    Readback = d3d12::D3D12_HEAP_TYPE_READBACK,
-    Custom = d3d12::D3D12_HEAP_TYPE_CUSTOM,
+    Default = Direct3D12::D3D12_HEAP_TYPE_DEFAULT.0 as u32,
+    Upload = Direct3D12::D3D12_HEAP_TYPE_UPLOAD.0 as u32,
+    Readback = Direct3D12::D3D12_HEAP_TYPE_READBACK.0 as u32,
+    Custom = Direct3D12::D3D12_HEAP_TYPE_CUSTOM.0 as u32,
 }
 
 #[repr(u32)]
 #[derive(Clone, Copy)]
 pub enum CpuPageProperty {
-    Unknown = d3d12::D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
-    NotAvailable = d3d12::D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE,
-    WriteCombine = d3d12::D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE,
-    WriteBack = d3d12::D3D12_CPU_PAGE_PROPERTY_WRITE_BACK,
+    Unknown = Direct3D12::D3D12_CPU_PAGE_PROPERTY_UNKNOWN.0 as u32,
+    NotAvailable = Direct3D12::D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE.0 as u32,
+    WriteCombine = Direct3D12::D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE.0 as u32,
+    WriteBack = Direct3D12::D3D12_CPU_PAGE_PROPERTY_WRITE_BACK.0 as u32,
 }
 
 #[repr(u32)]
 #[derive(Clone, Copy)]
 pub enum MemoryPool {
-    Unknown = d3d12::D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
-    L0 = d3d12::D3D12_MEMORY_POOL_L0,
-    L1 = d3d12::D3D12_MEMORY_POOL_L1,
+    Unknown = Direct3D12::D3D12_MEMORY_POOL_UNKNOWN.0 as u32,
+    L0 = Direct3D12::D3D12_MEMORY_POOL_L0.0 as u32,
+    L1 = Direct3D12::D3D12_MEMORY_POOL_L1.0 as u32,
 }
 
 bitflags! {
     pub struct HeapFlags: u32 {
-        const NONE = d3d12::D3D12_HEAP_FLAG_NONE;
-        const SHARED = d3d12::D3D12_HEAP_FLAG_SHARED;
-        const DENY_BUFFERS = d3d12::D3D12_HEAP_FLAG_DENY_BUFFERS;
-        const ALLOW_DISPLAY = d3d12::D3D12_HEAP_FLAG_ALLOW_DISPLAY;
-        const SHARED_CROSS_ADAPTER = d3d12::D3D12_HEAP_FLAG_SHARED_CROSS_ADAPTER;
-        const DENT_RT_DS_TEXTURES = d3d12::D3D12_HEAP_FLAG_DENY_RT_DS_TEXTURES;
-        const DENY_NON_RT_DS_TEXTURES = d3d12::D3D12_HEAP_FLAG_DENY_NON_RT_DS_TEXTURES;
-        const HARDWARE_PROTECTED = d3d12::D3D12_HEAP_FLAG_HARDWARE_PROTECTED;
-        const ALLOW_WRITE_WATCH = d3d12::D3D12_HEAP_FLAG_ALLOW_WRITE_WATCH;
-        const ALLOW_ALL_BUFFERS_AND_TEXTURES = d3d12::D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES;
-        const ALLOW_ONLY_BUFFERS = d3d12::D3D12_HEAP_FLAG_ALLOW_ONLY_BUFFERS;
-        const ALLOW_ONLY_NON_RT_DS_TEXTURES = d3d12::D3D12_HEAP_FLAG_ALLOW_ONLY_NON_RT_DS_TEXTURES;
-        const ALLOW_ONLY_RT_DS_TEXTURES = d3d12::D3D12_HEAP_FLAG_ALLOW_ONLY_RT_DS_TEXTURES;
+        const NONE = Direct3D12::D3D12_HEAP_FLAG_NONE.0 as u32;
+        const SHARED = Direct3D12::D3D12_HEAP_FLAG_SHARED.0 as u32;
+        const DENY_BUFFERS = Direct3D12::D3D12_HEAP_FLAG_DENY_BUFFERS.0 as u32;
+        const ALLOW_DISPLAY = Direct3D12::D3D12_HEAP_FLAG_ALLOW_DISPLAY.0 as u32;
+        const SHARED_CROSS_ADAPTER = Direct3D12::D3D12_HEAP_FLAG_SHARED_CROSS_ADAPTER.0 as u32;
+        const DENT_RT_DS_TEXTURES = Direct3D12::D3D12_HEAP_FLAG_DENY_RT_DS_TEXTURES.0 as u32;
+        const DENY_NON_RT_DS_TEXTURES = Direct3D12::D3D12_HEAP_FLAG_DENY_NON_RT_DS_TEXTURES.0 as u32;
+        const HARDWARE_PROTECTED = Direct3D12::D3D12_HEAP_FLAG_HARDWARE_PROTECTED.0 as u32;
+        const ALLOW_WRITE_WATCH = Direct3D12::D3D12_HEAP_FLAG_ALLOW_WRITE_WATCH.0 as u32;
+        const ALLOW_ALL_BUFFERS_AND_TEXTURES = Direct3D12::D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES.0 as u32;
+        const ALLOW_ONLY_BUFFERS = Direct3D12::D3D12_HEAP_FLAG_ALLOW_ONLY_BUFFERS.0 as u32;
+        const ALLOW_ONLY_NON_RT_DS_TEXTURES = Direct3D12::D3D12_HEAP_FLAG_ALLOW_ONLY_NON_RT_DS_TEXTURES.0 as u32;
+        const ALLOW_ONLY_RT_DS_TEXTURES = Direct3D12::D3D12_HEAP_FLAG_ALLOW_ONLY_RT_DS_TEXTURES.0 as u32;
     }
 }
 
 #[repr(transparent)]
-pub struct HeapProperties(pub d3d12::D3D12_HEAP_PROPERTIES);
+pub struct HeapProperties(pub Direct3D12::D3D12_HEAP_PROPERTIES);
 impl HeapProperties {
     pub fn new(
         heap_type: HeapType,
@@ -57,10 +57,10 @@ impl HeapProperties {
         creation_node_mask: u32,
         visible_node_mask: u32,
     ) -> Self {
-        HeapProperties(d3d12::D3D12_HEAP_PROPERTIES {
-            Type: heap_type as _,
-            CPUPageProperty: cpu_page_property as _,
-            MemoryPoolPreference: memory_pool_preference as _,
+        HeapProperties(Direct3D12::D3D12_HEAP_PROPERTIES {
+            Type: Direct3D12::D3D12_HEAP_TYPE(heap_type as _),
+            CPUPageProperty: Direct3D12::D3D12_CPU_PAGE_PROPERTY(cpu_page_property as _),
+            MemoryPoolPreference: Direct3D12::D3D12_MEMORY_POOL(memory_pool_preference as _),
             CreationNodeMask: creation_node_mask,
             VisibleNodeMask: visible_node_mask,
         })
@@ -68,7 +68,7 @@ impl HeapProperties {
 }
 
 #[repr(transparent)]
-pub struct HeapDesc(d3d12::D3D12_HEAP_DESC);
+pub struct HeapDesc(Direct3D12::D3D12_HEAP_DESC);
 impl HeapDesc {
     pub fn new(
         size_in_bytes: u64,
@@ -76,11 +76,11 @@ impl HeapDesc {
         alignment: u64,
         flags: HeapFlags,
     ) -> Self {
-        HeapDesc(d3d12::D3D12_HEAP_DESC {
+        HeapDesc(Direct3D12::D3D12_HEAP_DESC {
             SizeInBytes: size_in_bytes,
             Properties: properties.0,
             Alignment: alignment,
-            Flags: flags.bits(),
+            Flags: Direct3D12::D3D12_HEAP_FLAGS(flags.bits()),
         })
     }
 }

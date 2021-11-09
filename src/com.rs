@@ -1,11 +1,12 @@
-use crate::D3DResult;
 use std::{
+    ffi::c_void,
     fmt,
     hash::{Hash, Hasher},
+    mem,
     ops::Deref,
     ptr,
 };
-use winapi::{ctypes::c_void, um::unknwnbase::IUnknown, Interface};
+use windows::runtime::{self, IUnknown, Interface, IntoParam, Param};
 
 #[repr(transparent)]
 pub struct WeakPtr<T>(*mut T);
@@ -43,21 +44,28 @@ impl<T: Interface> WeakPtr<T> {
     }
 
     // Cast creates a new WeakPtr requiring explicit destroy call.
-    pub unsafe fn cast<U>(&self) -> D3DResult<WeakPtr<U>>
+    pub unsafe fn cast<U>(&self) -> Result<WeakPtr<U>, runtime::Error>
     where
         U: Interface,
     {
-        let mut obj = WeakPtr::<U>::null();
-        let hr = self
-            .as_unknown()
-            .QueryInterface(&U::uuidof(), obj.mut_void());
-        (obj, hr)
+        let hr = self.as_unknown().cast::<U>();
+        if hr.is_ok() {
+            Ok(WeakPtr(self.0 as *mut U))
+        } else {
+            Err(hr.err().unwrap())
+        }
     }
 
     // Destroying one instance of the WeakPtr will invalidate all
     // copies and clones.
     pub unsafe fn destroy(&self) {
-        self.as_unknown().Release();
+        mem::drop(self.as_unknown());
+    }
+}
+
+impl<'a, T: Interface> IntoParam<'a, T> for WeakPtr<T> {
+    fn into_param(self) -> Param<'a, T> {
+        unsafe { Param::Borrowed(self.0.as_ref().unwrap()) }
     }
 }
 

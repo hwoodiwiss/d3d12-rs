@@ -1,9 +1,9 @@
 use crate::{com::WeakPtr, Blob, D3DResult, Error, TextureAddressMode};
 use std::{fmt, mem, ops::Range};
-use winapi::{shared::dxgiformat, um::d3d12};
+use windows::Win32::Graphics::{Direct3D12, Dxgi};
 
-pub type CpuDescriptor = d3d12::D3D12_CPU_DESCRIPTOR_HANDLE;
-pub type GpuDescriptor = d3d12::D3D12_GPU_DESCRIPTOR_HANDLE;
+pub type CpuDescriptor = Direct3D12::D3D12_CPU_DESCRIPTOR_HANDLE;
+pub type GpuDescriptor = Direct3D12::D3D12_GPU_DESCRIPTOR_HANDLE;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Binding {
@@ -14,19 +14,19 @@ pub struct Binding {
 #[repr(u32)]
 #[derive(Clone, Copy, Debug)]
 pub enum DescriptorHeapType {
-    CbvSrvUav = d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-    Sampler = d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
-    Rtv = d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
-    Dsv = d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
+    CbvSrvUav = Direct3D12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV.0 as u32,
+    Sampler = Direct3D12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER.0 as u32,
+    Rtv = Direct3D12::D3D12_DESCRIPTOR_HEAP_TYPE_RTV.0 as u32,
+    Dsv = Direct3D12::D3D12_DESCRIPTOR_HEAP_TYPE_DSV.0 as u32,
 }
 
 bitflags! {
     pub struct DescriptorHeapFlags: u32 {
-        const SHADER_VISIBLE = d3d12::D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+        const SHADER_VISIBLE = Direct3D12::D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE.0 as u32;
     }
 }
 
-pub type DescriptorHeap = WeakPtr<d3d12::ID3D12DescriptorHeap>;
+pub type DescriptorHeap = WeakPtr<Direct3D12::ID3D12DescriptorHeap>;
 
 impl DescriptorHeap {
     pub fn start_cpu_descriptor(&self) -> CpuDescriptor {
@@ -41,29 +41,29 @@ impl DescriptorHeap {
 #[repr(u32)]
 #[derive(Clone, Copy, Debug)]
 pub enum ShaderVisibility {
-    All = d3d12::D3D12_SHADER_VISIBILITY_ALL,
-    VS = d3d12::D3D12_SHADER_VISIBILITY_VERTEX,
-    HS = d3d12::D3D12_SHADER_VISIBILITY_HULL,
-    DS = d3d12::D3D12_SHADER_VISIBILITY_DOMAIN,
-    GS = d3d12::D3D12_SHADER_VISIBILITY_GEOMETRY,
-    PS = d3d12::D3D12_SHADER_VISIBILITY_PIXEL,
+    All = Direct3D12::D3D12_SHADER_VISIBILITY_ALL.0 as u32,
+    VS = Direct3D12::D3D12_SHADER_VISIBILITY_VERTEX.0 as u32,
+    HS = Direct3D12::D3D12_SHADER_VISIBILITY_HULL.0 as u32,
+    DS = Direct3D12::D3D12_SHADER_VISIBILITY_DOMAIN.0 as u32,
+    GS = Direct3D12::D3D12_SHADER_VISIBILITY_GEOMETRY.0 as u32,
+    PS = Direct3D12::D3D12_SHADER_VISIBILITY_PIXEL.0 as u32,
 }
 
 #[repr(u32)]
 #[derive(Clone, Copy, Debug)]
 pub enum DescriptorRangeType {
-    SRV = d3d12::D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
-    UAV = d3d12::D3D12_DESCRIPTOR_RANGE_TYPE_UAV,
-    CBV = d3d12::D3D12_DESCRIPTOR_RANGE_TYPE_CBV,
-    Sampler = d3d12::D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER,
+    SRV = Direct3D12::D3D12_DESCRIPTOR_RANGE_TYPE_SRV.0 as u32,
+    UAV = Direct3D12::D3D12_DESCRIPTOR_RANGE_TYPE_UAV.0 as u32,
+    CBV = Direct3D12::D3D12_DESCRIPTOR_RANGE_TYPE_CBV.0 as u32,
+    Sampler = Direct3D12::D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER.0 as u32,
 }
 
 #[repr(transparent)]
-pub struct DescriptorRange(d3d12::D3D12_DESCRIPTOR_RANGE);
+pub struct DescriptorRange(Direct3D12::D3D12_DESCRIPTOR_RANGE);
 impl DescriptorRange {
     pub fn new(ty: DescriptorRangeType, count: u32, base_binding: Binding, offset: u32) -> Self {
-        DescriptorRange(d3d12::D3D12_DESCRIPTOR_RANGE {
-            RangeType: ty as _,
+        DescriptorRange(Direct3D12::D3D12_DESCRIPTOR_RANGE {
+            RangeType: Direct3D12::D3D12_DESCRIPTOR_RANGE_TYPE(ty as _),
             NumDescriptors: count,
             BaseShaderRegister: base_binding.register,
             RegisterSpace: base_binding.space,
@@ -86,32 +86,32 @@ impl fmt::Debug for DescriptorRange {
 }
 
 #[repr(transparent)]
-pub struct RootParameter(d3d12::D3D12_ROOT_PARAMETER);
+pub struct RootParameter(Direct3D12::D3D12_ROOT_PARAMETER);
 impl RootParameter {
     // TODO: DescriptorRange must outlive Self
     pub fn descriptor_table(visibility: ShaderVisibility, ranges: &[DescriptorRange]) -> Self {
-        let mut param = d3d12::D3D12_ROOT_PARAMETER {
-            ParameterType: d3d12::D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
-            ShaderVisibility: visibility as _,
+        let mut param = Direct3D12::D3D12_ROOT_PARAMETER {
+            ParameterType: Direct3D12::D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
+            ShaderVisibility: Direct3D12::D3D12_SHADER_VISIBILITY(visibility as _),
             ..unsafe { mem::zeroed() }
         };
 
-        *unsafe { param.u.DescriptorTable_mut() } = d3d12::D3D12_ROOT_DESCRIPTOR_TABLE {
+        param.Anonymous.DescriptorTable = Direct3D12::D3D12_ROOT_DESCRIPTOR_TABLE {
             NumDescriptorRanges: ranges.len() as _,
-            pDescriptorRanges: ranges.as_ptr() as *const _,
+            pDescriptorRanges: ranges.iter().map(|x| x.0).collect::<Vec<_>>().as_mut_ptr(),
         };
 
         RootParameter(param)
     }
 
     pub fn constants(visibility: ShaderVisibility, binding: Binding, num: u32) -> Self {
-        let mut param = d3d12::D3D12_ROOT_PARAMETER {
-            ParameterType: d3d12::D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS,
-            ShaderVisibility: visibility as _,
+        let mut param = Direct3D12::D3D12_ROOT_PARAMETER {
+            ParameterType: Direct3D12::D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS,
+            ShaderVisibility: Direct3D12::D3D12_SHADER_VISIBILITY(visibility as _),
             ..unsafe { mem::zeroed() }
         };
 
-        *unsafe { param.u.Constants_mut() } = d3d12::D3D12_ROOT_CONSTANTS {
+        param.Anonymous.Constants = Direct3D12::D3D12_ROOT_CONSTANTS {
             ShaderRegister: binding.register,
             RegisterSpace: binding.space,
             Num32BitValues: num,
@@ -122,17 +122,17 @@ impl RootParameter {
 
     //TODO: should this be unsafe?
     pub fn descriptor(
-        ty: d3d12::D3D12_ROOT_PARAMETER_TYPE,
+        ty: Direct3D12::D3D12_ROOT_PARAMETER_TYPE,
         visibility: ShaderVisibility,
         binding: Binding,
     ) -> Self {
-        let mut param = d3d12::D3D12_ROOT_PARAMETER {
+        let mut param = Direct3D12::D3D12_ROOT_PARAMETER {
             ParameterType: ty,
-            ShaderVisibility: visibility as _,
+            ShaderVisibility: Direct3D12::D3D12_SHADER_VISIBILITY(visibility as _),
             ..unsafe { mem::zeroed() }
         };
 
-        *unsafe { param.u.Descriptor_mut() } = d3d12::D3D12_ROOT_DESCRIPTOR {
+        param.Anonymous.Descriptor = Direct3D12::D3D12_ROOT_DESCRIPTOR {
             ShaderRegister: binding.register,
             RegisterSpace: binding.space,
         };
@@ -141,15 +141,27 @@ impl RootParameter {
     }
 
     pub fn cbv_descriptor(visibility: ShaderVisibility, binding: Binding) -> Self {
-        Self::descriptor(d3d12::D3D12_ROOT_PARAMETER_TYPE_CBV, visibility, binding)
+        Self::descriptor(
+            Direct3D12::D3D12_ROOT_PARAMETER_TYPE_CBV,
+            visibility,
+            binding,
+        )
     }
 
     pub fn srv_descriptor(visibility: ShaderVisibility, binding: Binding) -> Self {
-        Self::descriptor(d3d12::D3D12_ROOT_PARAMETER_TYPE_SRV, visibility, binding)
+        Self::descriptor(
+            Direct3D12::D3D12_ROOT_PARAMETER_TYPE_SRV,
+            visibility,
+            binding,
+        )
     }
 
     pub fn uav_descriptor(visibility: ShaderVisibility, binding: Binding) -> Self {
-        Self::descriptor(d3d12::D3D12_ROOT_PARAMETER_TYPE_UAV, visibility, binding)
+        Self::descriptor(
+            Direct3D12::D3D12_ROOT_PARAMETER_TYPE_UAV,
+            visibility,
+            binding,
+        )
     }
 }
 
@@ -164,15 +176,15 @@ impl fmt::Debug for RootParameter {
             SingleUav(Binding),
         }
         let kind = match self.0.ParameterType {
-            d3d12::D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE => unsafe {
-                let raw = self.0.u.DescriptorTable();
+            Direct3D12::D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE => unsafe {
+                let raw = self.0.Anonymous.DescriptorTable;
                 Inner::Table(std::slice::from_raw_parts(
                     raw.pDescriptorRanges as *const _,
                     raw.NumDescriptorRanges as usize,
                 ))
             },
-            d3d12::D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS => unsafe {
-                let raw = self.0.u.Constants();
+            Direct3D12::D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS => unsafe {
+                let raw = self.0.Anonymous.Constants;
                 Inner::Constants {
                     binding: Binding {
                         space: raw.RegisterSpace,
@@ -182,15 +194,15 @@ impl fmt::Debug for RootParameter {
                 }
             },
             _ => unsafe {
-                let raw = self.0.u.Descriptor();
+                let raw = self.0.Anonymous.Descriptor;
                 let binding = Binding {
                     space: raw.RegisterSpace,
                     register: raw.ShaderRegister,
                 };
                 match self.0.ParameterType {
-                    d3d12::D3D12_ROOT_PARAMETER_TYPE_CBV => Inner::SingleCbv(binding),
-                    d3d12::D3D12_ROOT_PARAMETER_TYPE_SRV => Inner::SingleSrv(binding),
-                    d3d12::D3D12_ROOT_PARAMETER_TYPE_UAV => Inner::SingleUav(binding),
+                    Direct3D12::D3D12_ROOT_PARAMETER_TYPE_CBV => Inner::SingleCbv(binding),
+                    Direct3D12::D3D12_ROOT_PARAMETER_TYPE_SRV => Inner::SingleSrv(binding),
+                    Direct3D12::D3D12_ROOT_PARAMETER_TYPE_UAV => Inner::SingleUav(binding),
                     other => panic!("Unexpected type {:?}", other),
                 }
             },
@@ -207,26 +219,26 @@ impl fmt::Debug for RootParameter {
 #[repr(u32)]
 #[derive(Copy, Clone, Debug)]
 pub enum StaticBorderColor {
-    TransparentBlack = d3d12::D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK,
-    OpaqueBlack = d3d12::D3D12_STATIC_BORDER_COLOR_OPAQUE_BLACK,
-    OpaqueWhite = d3d12::D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE,
+    TransparentBlack = Direct3D12::D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK.0 as u32,
+    OpaqueBlack = Direct3D12::D3D12_STATIC_BORDER_COLOR_OPAQUE_BLACK.0 as u32,
+    OpaqueWhite = Direct3D12::D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE.0 as u32,
 }
 
 #[repr(transparent)]
-pub struct StaticSampler(d3d12::D3D12_STATIC_SAMPLER_DESC);
+pub struct StaticSampler(Direct3D12::D3D12_STATIC_SAMPLER_DESC);
 impl StaticSampler {
     pub fn new(
         visibility: ShaderVisibility,
         binding: Binding,
-        filter: d3d12::D3D12_FILTER,
+        filter: Direct3D12::D3D12_FILTER,
         address_mode: TextureAddressMode,
         mip_lod_bias: f32,
         max_anisotropy: u32,
-        comparison_op: d3d12::D3D12_COMPARISON_FUNC,
+        comparison_op: Direct3D12::D3D12_COMPARISON_FUNC,
         border_color: StaticBorderColor,
         lod: Range<f32>,
     ) -> Self {
-        StaticSampler(d3d12::D3D12_STATIC_SAMPLER_DESC {
+        StaticSampler(Direct3D12::D3D12_STATIC_SAMPLER_DESC {
             Filter: filter,
             AddressU: address_mode[0],
             AddressV: address_mode[1],
@@ -234,12 +246,12 @@ impl StaticSampler {
             MipLODBias: mip_lod_bias,
             MaxAnisotropy: max_anisotropy,
             ComparisonFunc: comparison_op,
-            BorderColor: border_color as _,
+            BorderColor: Direct3D12::D3D12_STATIC_BORDER_COLOR(border_color as _),
             MinLOD: lod.start,
             MaxLOD: lod.end,
             ShaderRegister: binding.register,
             RegisterSpace: binding.space,
-            ShaderVisibility: visibility as _,
+            ShaderVisibility: Direct3D12::D3D12_SHADER_VISIBILITY(visibility as _),
         })
     }
 }
@@ -247,26 +259,26 @@ impl StaticSampler {
 #[repr(u32)]
 #[derive(Copy, Clone, Debug)]
 pub enum RootSignatureVersion {
-    V1_0 = d3d12::D3D_ROOT_SIGNATURE_VERSION_1_0,
-    V1_1 = d3d12::D3D_ROOT_SIGNATURE_VERSION_1_1,
+    V1_0 = Direct3D12::D3D_ROOT_SIGNATURE_VERSION_1_0.0 as u32,
+    V1_1 = Direct3D12::D3D_ROOT_SIGNATURE_VERSION_1_1.0 as u32,
 }
 
 bitflags! {
     pub struct RootSignatureFlags: u32 {
-        const ALLOW_IA_INPUT_LAYOUT = d3d12::D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
-        const DENY_VS_ROOT_ACCESS = d3d12::D3D12_ROOT_SIGNATURE_FLAG_DENY_VERTEX_SHADER_ROOT_ACCESS;
-        const DENY_HS_ROOT_ACCESS = d3d12::D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS;
-        const DENY_DS_ROOT_ACCESS = d3d12::D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS;
-        const DENY_GS_ROOT_ACCESS = d3d12::D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
-        const DENY_PS_ROOT_ACCESS = d3d12::D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
+        const ALLOW_IA_INPUT_LAYOUT = Direct3D12::D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT.0 as u32;
+        const DENY_VS_ROOT_ACCESS = Direct3D12::D3D12_ROOT_SIGNATURE_FLAG_DENY_VERTEX_SHADER_ROOT_ACCESS.0 as u32;
+        const DENY_HS_ROOT_ACCESS = Direct3D12::D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS.0 as u32;
+        const DENY_DS_ROOT_ACCESS = Direct3D12::D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS.0 as u32;
+        const DENY_GS_ROOT_ACCESS = Direct3D12::D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS.0 as u32;
+        const DENY_PS_ROOT_ACCESS = Direct3D12::D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS.0 as u32;
     }
 }
 
-pub type RootSignature = WeakPtr<d3d12::ID3D12RootSignature>;
+pub type RootSignature = WeakPtr<Direct3D12::ID3D12RootSignature>;
 pub type BlobResult = D3DResult<(Blob, Error)>;
 
 #[cfg(feature = "libloading")]
-impl crate::D3D12Lib {
+impl crate::Direct3D12Lib {
     pub fn serialize_root_signature(
         &self,
         version: RootSignatureVersion,
@@ -274,15 +286,15 @@ impl crate::D3D12Lib {
         static_samplers: &[StaticSampler],
         flags: RootSignatureFlags,
     ) -> Result<BlobResult, libloading::Error> {
-        use winapi::um::d3dcommon::ID3DBlob;
+        use Dxgi::ID3DBlob;
         type Fun = extern "system" fn(
-            *const d3d12::D3D12_ROOT_SIGNATURE_DESC,
-            d3d12::D3D_ROOT_SIGNATURE_VERSION,
+            *const Direct3D12::D3D12_ROOT_SIGNATURE_DESC,
+            Direct3D12::D3D_ROOT_SIGNATURE_VERSION,
             *mut *mut ID3DBlob,
             *mut *mut ID3DBlob,
         ) -> crate::HRESULT;
 
-        let desc = d3d12::D3D12_ROOT_SIGNATURE_DESC {
+        let desc = Direct3D12::D3D12_ROOT_SIGNATURE_DESC {
             NumParameters: parameters.len() as _,
             pParameters: parameters.as_ptr() as *const _,
             NumStaticSamplers: static_samplers.len() as _,
@@ -293,7 +305,8 @@ impl crate::D3D12Lib {
         let mut blob = Blob::null();
         let mut error = Error::null();
         let hr = unsafe {
-            let func: libloading::Symbol<Fun> = self.lib.get(b"D3D12SerializeRootSignature")?;
+            let func: libloading::Symbol<Fun> =
+                self.lib.get(b"Direct3D12SerializeRootSignature")?;
             func(
                 &desc,
                 version as _,
@@ -317,7 +330,7 @@ impl RootSignature {
         let mut blob = Blob::null();
         let mut error = Error::null();
 
-        let desc = d3d12::D3D12_ROOT_SIGNATURE_DESC {
+        let desc = Direct3D12::D3D12_ROOT_SIGNATURE_DESC {
             NumParameters: parameters.len() as _,
             pParameters: parameters.as_ptr() as *const _,
             NumStaticSamplers: static_samplers.len() as _,
@@ -326,7 +339,7 @@ impl RootSignature {
         };
 
         let hr = unsafe {
-            d3d12::D3D12SerializeRootSignature(
+            Direct3D12::D3D12SerializeRootSignature(
                 &desc,
                 version as _,
                 blob.mut_void() as *mut *mut _,
@@ -339,17 +352,17 @@ impl RootSignature {
 }
 
 #[repr(transparent)]
-pub struct RenderTargetViewDesc(pub(crate) d3d12::D3D12_RENDER_TARGET_VIEW_DESC);
+pub struct RenderTargetViewDesc(pub(crate) Direct3D12::D3D12_RENDER_TARGET_VIEW_DESC);
 
 impl RenderTargetViewDesc {
-    pub fn texture_2d(format: dxgiformat::DXGI_FORMAT, mip_slice: u32, plane_slice: u32) -> Self {
-        let mut desc = d3d12::D3D12_RENDER_TARGET_VIEW_DESC {
+    pub fn texture_2d(format: Dxgi::DXGI_FORMAT, mip_slice: u32, plane_slice: u32) -> Self {
+        let mut desc = Direct3D12::D3D12_RENDER_TARGET_VIEW_DESC {
             Format: format,
-            ViewDimension: d3d12::D3D12_RTV_DIMENSION_TEXTURE2D,
+            ViewDimension: Direct3D12::D3D12_RTV_DIMENSION_TEXTURE2D,
             ..unsafe { mem::zeroed() }
         };
 
-        *unsafe { desc.u.Texture2D_mut() } = d3d12::D3D12_TEX2D_RTV {
+        desc.Anonymous.Texture2D = Direct3D12::D3D12_TEX2D_RTV {
             MipSlice: mip_slice,
             PlaneSlice: plane_slice,
         };

@@ -2,10 +2,10 @@
 extern crate bitflags;
 
 use std::ffi::CStr;
-use winapi::{
-    shared::dxgiformat,
-    um::{d3d12, d3dcommon},
-};
+
+use windows::Win32::Foundation;
+use windows::Win32::Graphics::{Dxgi, Hlsl};
+use windows::{runtime::HRESULT, Win32::Graphics::Direct3D11, Win32::Graphics::Direct3D12};
 
 mod com;
 mod command_allocator;
@@ -35,12 +35,10 @@ pub use crate::queue::*;
 pub use crate::resource::*;
 pub use crate::sync::*;
 
-pub use winapi::shared::winerror::HRESULT;
-
-pub type D3DResult<T> = (T, HRESULT);
-pub type GpuAddress = d3d12::D3D12_GPU_VIRTUAL_ADDRESS;
-pub type Format = dxgiformat::DXGI_FORMAT;
-pub type Rect = d3d12::D3D12_RECT;
+pub type D3DResult<T> = (T, windows::runtime::Result<()>);
+pub type GpuAddress = Direct3D12::D3D12_GPU_VIRTUAL_ADDRESS_RANGE;
+pub type Format = Dxgi::DXGI_FORMAT;
+pub type Rect = Foundation::RECT;
 pub type NodeMask = u32;
 
 /// Index into the root signature.
@@ -56,7 +54,7 @@ pub type InstanceCount = u32;
 /// Number of work groups.
 pub type WorkGroupCount = [u32; 3];
 
-pub type TextureAddressMode = [d3d12::D3D12_TEXTURE_ADDRESS_MODE; 3];
+pub type TextureAddressMode = [Direct3D12::D3D12_TEXTURE_ADDRESS_MODE; 3];
 
 pub struct SampleDesc {
     pub count: u32,
@@ -65,20 +63,20 @@ pub struct SampleDesc {
 
 #[repr(u32)]
 pub enum FeatureLevel {
-    L9_1 = d3dcommon::D3D_FEATURE_LEVEL_9_1,
-    L9_2 = d3dcommon::D3D_FEATURE_LEVEL_9_2,
-    L9_3 = d3dcommon::D3D_FEATURE_LEVEL_9_3,
-    L10_0 = d3dcommon::D3D_FEATURE_LEVEL_10_0,
-    L10_1 = d3dcommon::D3D_FEATURE_LEVEL_10_1,
-    L11_0 = d3dcommon::D3D_FEATURE_LEVEL_11_0,
-    L11_1 = d3dcommon::D3D_FEATURE_LEVEL_11_1,
-    L12_0 = d3dcommon::D3D_FEATURE_LEVEL_12_0,
-    L12_1 = d3dcommon::D3D_FEATURE_LEVEL_12_1,
+    L9_1 = Direct3D11::D3D_FEATURE_LEVEL_9_1.0 as u32,
+    L9_2 = Direct3D11::D3D_FEATURE_LEVEL_9_2.0 as u32,
+    L9_3 = Direct3D11::D3D_FEATURE_LEVEL_9_3.0 as u32,
+    L10_0 = Direct3D11::D3D_FEATURE_LEVEL_10_0.0 as u32,
+    L10_1 = Direct3D11::D3D_FEATURE_LEVEL_10_1.0 as u32,
+    L11_0 = Direct3D11::D3D_FEATURE_LEVEL_11_0.0 as u32,
+    L11_1 = Direct3D11::D3D_FEATURE_LEVEL_11_1.0 as u32,
+    L12_0 = Direct3D11::D3D_FEATURE_LEVEL_12_0.0 as u32,
+    L12_1 = Direct3D11::D3D_FEATURE_LEVEL_12_1.0 as u32,
 }
 
-pub type Blob = WeakPtr<d3dcommon::ID3DBlob>;
+pub type Blob = WeakPtr<Direct3D11::ID3DBlob>;
 
-pub type Error = WeakPtr<d3dcommon::ID3DBlob>;
+pub type Error = WeakPtr<Hlsl::IDxcBlob>;
 impl Error {
     pub unsafe fn as_c_str(&self) -> &CStr {
         debug_assert!(!self.is_null());
@@ -89,13 +87,13 @@ impl Error {
 
 #[cfg(feature = "libloading")]
 #[derive(Debug)]
-pub struct D3D12Lib {
+pub struct Direct3D12Lib {
     lib: libloading::Library,
 }
 
 #[cfg(feature = "libloading")]
-impl D3D12Lib {
+impl Direct3D12Lib {
     pub fn new() -> Result<Self, libloading::Error> {
-        unsafe { libloading::Library::new("d3d12.dll").map(|lib| D3D12Lib { lib }) }
+        unsafe { libloading::Library::new("Direct3D12.dll").map(|lib| Direct3D12Lib { lib }) }
     }
 }

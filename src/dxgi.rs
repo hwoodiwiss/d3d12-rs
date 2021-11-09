@@ -1,51 +1,68 @@
-use crate::{com::WeakPtr, CommandQueue, D3DResult, Resource, SampleDesc, HRESULT};
-use std::ptr;
-use winapi::{
-    shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, dxgiformat, dxgitype, windef::HWND},
-    um::{d3d12, dxgidebug},
-    Interface,
+use crate::{com::WeakPtr, CommandQueue, D3DResult, Resource, SampleDesc};
+use std::{ffi::c_void, ptr};
+use windows::{
+    runtime::{self, Interface},
+    Win32::{
+        Foundation::{self, HWND},
+        Graphics::{
+            Direct3D12,
+            Dxgi::{self, IDXGIDevice2, IDXGIOutput3},
+        },
+    },
 };
 
 bitflags! {
     pub struct FactoryCreationFlags: u32 {
-        const DEBUG = dxgi1_3::DXGI_CREATE_FACTORY_DEBUG;
+        const DEBUG = Dxgi::DXGI_CREATE_FACTORY_DEBUG;
     }
 }
 
 #[repr(u32)]
 #[derive(Debug, Copy, Clone)]
 pub enum Scaling {
-    Stretch = dxgi1_2::DXGI_SCALING_STRETCH,
-    Identity = dxgi1_2::DXGI_SCALING_NONE,
-    Aspect = dxgi1_2::DXGI_SCALING_ASPECT_RATIO_STRETCH,
+    Stretch = Dxgi::DXGI_SCALING_STRETCH.0 as u32,
+    Identity = Dxgi::DXGI_SCALING_NONE.0 as u32,
+    Aspect = Dxgi::DXGI_SCALING_ASPECT_RATIO_STRETCH.0 as u32,
 }
 
 #[repr(u32)]
 #[derive(Debug, Copy, Clone)]
 pub enum SwapEffect {
-    Discard = dxgi::DXGI_SWAP_EFFECT_DISCARD,
-    Sequential = dxgi::DXGI_SWAP_EFFECT_SEQUENTIAL,
-    FlipDiscard = dxgi::DXGI_SWAP_EFFECT_FLIP_DISCARD,
-    FlipSequential = dxgi::DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL,
+    Discard = Dxgi::DXGI_SWAP_EFFECT_DISCARD.0 as u32,
+    Sequential = Dxgi::DXGI_SWAP_EFFECT_SEQUENTIAL.0 as u32,
+    FlipDiscard = Dxgi::DXGI_SWAP_EFFECT_FLIP_DISCARD.0 as u32,
+    FlipSequential = Dxgi::DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL.0 as u32,
 }
 
 #[repr(u32)]
 #[derive(Debug, Copy, Clone)]
 pub enum AlphaMode {
-    Unspecified = dxgi1_2::DXGI_ALPHA_MODE_UNSPECIFIED,
-    Premultiplied = dxgi1_2::DXGI_ALPHA_MODE_PREMULTIPLIED,
-    Straight = dxgi1_2::DXGI_ALPHA_MODE_STRAIGHT,
-    Ignore = dxgi1_2::DXGI_ALPHA_MODE_IGNORE,
-    ForceDword = dxgi1_2::DXGI_ALPHA_MODE_FORCE_DWORD,
+    Unspecified = Dxgi::DXGI_ALPHA_MODE_UNSPECIFIED.0 as u32,
+    Premultiplied = Dxgi::DXGI_ALPHA_MODE_PREMULTIPLIED.0 as u32,
+    Straight = Dxgi::DXGI_ALPHA_MODE_STRAIGHT.0 as u32,
+    Ignore = Dxgi::DXGI_ALPHA_MODE_IGNORE.0 as u32,
+    ForceDword = Dxgi::DXGI_ALPHA_MODE_FORCE_DWORD.0 as u32,
 }
 
-pub type Adapter1 = WeakPtr<dxgi::IDXGIAdapter1>;
-pub type Factory2 = WeakPtr<dxgi1_2::IDXGIFactory2>;
-pub type Factory4 = WeakPtr<dxgi1_4::IDXGIFactory4>;
-pub type InfoQueue = WeakPtr<dxgidebug::IDXGIInfoQueue>;
-pub type SwapChain = WeakPtr<dxgi::IDXGISwapChain>;
-pub type SwapChain1 = WeakPtr<dxgi1_2::IDXGISwapChain1>;
-pub type SwapChain3 = WeakPtr<dxgi1_4::IDXGISwapChain3>;
+bitflags! {
+    pub struct DxgiUsage: u32 {
+        const BACKBUFFER = Dxgi::DXGI_USAGE_BACK_BUFFER;
+        const DISCARDONPRESENT = Dxgi::DXGI_USAGE_DISCARD_ON_PRESENT;
+        const READONLY = Dxgi::DXGI_USAGE_READ_ONLY;
+        const RENDERTARGETOUTPUT = Dxgi::DXGI_USAGE_RENDER_TARGET_OUTPUT;
+        const SHADERINPUT = Dxgi::DXGI_USAGE_SHADER_INPUT;
+        const SHARED = Dxgi::DXGI_USAGE_SHARED;
+        const UNORDEREDACCESS = Dxgi::DXGI_USAGE_UNORDERED_ACCESS;
+    }
+}
+
+pub type Adapter1 = WeakPtr<Dxgi::IDXGIAdapter1>;
+pub type Factory2 = WeakPtr<Dxgi::IDXGIFactory2>;
+pub type Factory4 = WeakPtr<Dxgi::IDXGIFactory4>;
+pub type InfoQueue = WeakPtr<Dxgi::IDXGIInfoQueue>;
+pub type SwapChain = WeakPtr<Dxgi::IDXGISwapChain>;
+pub type SwapChain1 = WeakPtr<Dxgi::IDXGISwapChain1>;
+pub type SwapChain3 = WeakPtr<Dxgi::IDXGISwapChain3>;
 
 #[cfg(feature = "libloading")]
 #[derive(Debug)]
@@ -64,35 +81,26 @@ impl DxgiLib {
         flags: FactoryCreationFlags,
     ) -> Result<D3DResult<Factory4>, libloading::Error> {
         type Fun = extern "system" fn(
-            winapi::shared::minwindef::UINT,
-            winapi::shared::guiddef::REFIID,
-            *mut *mut winapi::ctypes::c_void,
-        ) -> HRESULT;
-
+            u32,
+            &runtime::GUID,
+            *mut *mut std::ffi::c_void,
+        ) -> runtime::Result<()>;
         let mut factory = Factory4::null();
         let hr = unsafe {
             let func: libloading::Symbol<Fun> = self.lib.get(b"CreateDXGIFactory2")?;
-            func(
-                flags.bits(),
-                &dxgi1_4::IDXGIFactory4::uuidof(),
-                factory.mut_void(),
-            )
+            func(flags.bits(), &Dxgi::IDXGIFactory4::IID, factory.mut_void())
         };
 
         Ok((factory, hr))
     }
 
     pub fn get_debug_interface1(&self) -> Result<D3DResult<InfoQueue>, libloading::Error> {
-        type Fun = extern "system" fn(
-            winapi::shared::minwindef::UINT,
-            winapi::shared::guiddef::REFIID,
-            *mut *mut winapi::ctypes::c_void,
-        ) -> HRESULT;
+        type Fun = extern "system" fn(u32, &runtime::GUID, *mut *mut c_void) -> runtime::Result<()>;
 
         let mut queue = InfoQueue::null();
         let hr = unsafe {
             let func: libloading::Symbol<Fun> = self.lib.get(b"DXGIGetDebugInterface1")?;
-            func(0, &dxgidebug::IDXGIInfoQueue::uuidof(), queue.mut_void())
+            func(0, &Dxgi::IDXGIInfoQueue::IID, queue.mut_void())
         };
         Ok((queue, hr))
     }
@@ -102,10 +110,10 @@ impl DxgiLib {
 pub struct SwapchainDesc {
     pub width: u32,
     pub height: u32,
-    pub format: dxgiformat::DXGI_FORMAT,
+    pub format: Dxgi::DXGI_FORMAT,
     pub stereo: bool,
     pub sample: SampleDesc,
-    pub buffer_usage: dxgitype::DXGI_USAGE,
+    pub buffer_usage: DxgiUsage,
     pub buffer_count: u32,
     pub scaling: Scaling,
     pub swap_effect: SwapEffect,
@@ -121,52 +129,49 @@ impl Factory2 {
         hwnd: HWND,
         desc: &SwapchainDesc,
     ) -> D3DResult<SwapChain1> {
-        let desc = dxgi1_2::DXGI_SWAP_CHAIN_DESC1 {
-            AlphaMode: desc.alpha_mode as _,
+        let desc = Dxgi::DXGI_SWAP_CHAIN_DESC1 {
+            AlphaMode: Dxgi::DXGI_ALPHA_MODE(desc.alpha_mode as _),
             BufferCount: desc.buffer_count,
             Width: desc.width,
             Height: desc.height,
             Format: desc.format,
             Flags: desc.flags,
-            BufferUsage: desc.buffer_usage,
-            SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
+            BufferUsage: desc.buffer_usage.bits(),
+            SampleDesc: Dxgi::DXGI_SAMPLE_DESC {
                 Count: desc.sample.count,
                 Quality: desc.sample.quality,
             },
-            Scaling: desc.scaling as _,
-            Stereo: desc.stereo as _,
-            SwapEffect: desc.swap_effect as _,
+            Scaling: Dxgi::DXGI_SCALING(desc.scaling as _),
+            Stereo: Foundation::BOOL(desc.stereo as _),
+            SwapEffect: Dxgi::DXGI_SWAP_EFFECT(desc.swap_effect as _),
         };
 
-        let mut swap_chain = SwapChain1::null();
         let hr = unsafe {
-            self.CreateSwapChainForHwnd(
-                queue.as_mut_ptr() as *mut _,
-                hwnd,
-                &desc,
-                ptr::null(),
-                ptr::null_mut(),
-                swap_chain.mut_void() as *mut *mut _,
-            )
+            let device: Option<IDXGIDevice2>;
+            queue.GetDevice(&mut device);
+            let device = device.unwrap();
+            let output: IDXGIOutput3;
+            self.CreateSwapChainForHwnd(device, hwnd, &desc, ptr::null(), output)
         };
 
-        (swap_chain, hr)
+        if let Ok(swap_chain) = hr {
+            (unsafe { WeakPtr::from_raw(&mut swap_chain) }, Ok(()))
+        } else {
+            (WeakPtr::null(), Err(hr.err().unwrap()))
+        }
     }
 }
 
 impl Factory4 {
     #[cfg(feature = "implicit-link")]
     pub fn create(flags: FactoryCreationFlags) -> D3DResult<Self> {
-        let mut factory = Factory4::null();
-        let hr = unsafe {
-            dxgi1_3::CreateDXGIFactory2(
-                flags.bits(),
-                &dxgi1_4::IDXGIFactory4::uuidof(),
-                factory.mut_void(),
-            )
-        };
+        let hr = unsafe { Dxgi::CreateDXGIFactory2::<Dxgi::IDXGIFactory4>(flags.bits()) };
 
-        (factory, hr)
+        if let Ok(factory) = hr {
+            (unsafe { WeakPtr::from_raw(&mut factory) }, Ok(()))
+        } else {
+            (WeakPtr::null(), Err(hr.err().unwrap()))
+        }
     }
 
     pub fn as_factory2(&self) -> Factory2 {
@@ -174,42 +179,52 @@ impl Factory4 {
     }
 
     pub fn enumerate_adapters(&self, id: u32) -> D3DResult<Adapter1> {
-        let mut adapter = Adapter1::null();
-        let hr = unsafe { self.EnumAdapters1(id, adapter.mut_void() as *mut *mut _) };
+        let hr = unsafe { self.EnumAdapters1(id) };
 
-        (adapter, hr)
+        if let Ok(adapter) = hr {
+            (unsafe { WeakPtr::from_raw(&mut adapter) }, Ok(()))
+        } else {
+            (WeakPtr::null(), Err(hr.err().unwrap()))
+        }
     }
 }
 
 bitflags! {
     pub struct SwapChainPresentFlags: u32 {
-        const DXGI_PRESENT_DO_NOT_SEQUENCE = dxgi::DXGI_PRESENT_DO_NOT_SEQUENCE;
-        const DXGI_PRESENT_TEST = dxgi::DXGI_PRESENT_TEST;
-        const DXGI_PRESENT_RESTART = dxgi::DXGI_PRESENT_RESTART;
-        const DXGI_PRESENT_DO_NOT_WAIT = dxgi::DXGI_PRESENT_DO_NOT_WAIT;
-        const DXGI_PRESENT_RESTRICT_TO_OUTPUT = dxgi::DXGI_PRESENT_RESTRICT_TO_OUTPUT;
-        const DXGI_PRESENT_STEREO_PREFER_RIGHT = dxgi::DXGI_PRESENT_STEREO_PREFER_RIGHT;
-        const DXGI_PRESENT_STEREO_TEMPORARY_MONO = dxgi::DXGI_PRESENT_STEREO_TEMPORARY_MONO;
-        const DXGI_PRESENT_USE_DURATION = dxgi::DXGI_PRESENT_USE_DURATION;
-        const DXGI_PRESENT_ALLOW_TEARING = dxgi::DXGI_PRESENT_ALLOW_TEARING;
+        const DXGI_PRESENT_DO_NOT_SEQUENCE = Dxgi::DXGI_PRESENT_DO_NOT_SEQUENCE;
+        const DXGI_PRESENT_TEST = Dxgi::DXGI_PRESENT_TEST;
+        const DXGI_PRESENT_RESTART = Dxgi::DXGI_PRESENT_RESTART;
+        const DXGI_PRESENT_DO_NOT_WAIT = Dxgi::DXGI_PRESENT_DO_NOT_WAIT;
+        const DXGI_PRESENT_RESTRICT_TO_OUTPUT = Dxgi::DXGI_PRESENT_RESTRICT_TO_OUTPUT;
+        const DXGI_PRESENT_STEREO_PREFER_RIGHT = Dxgi::DXGI_PRESENT_STEREO_PREFER_RIGHT;
+        const DXGI_PRESENT_STEREO_TEMPORARY_MONO = Dxgi::DXGI_PRESENT_STEREO_TEMPORARY_MONO;
+        const DXGI_PRESENT_USE_DURATION = Dxgi::DXGI_PRESENT_USE_DURATION;
+        const DXGI_PRESENT_ALLOW_TEARING = Dxgi::DXGI_PRESENT_ALLOW_TEARING;
     }
 }
 
 impl SwapChain {
     pub fn get_buffer(&self, id: u32) -> D3DResult<Resource> {
         let mut resource = Resource::null();
-        let hr =
-            unsafe { self.GetBuffer(id, &d3d12::ID3D12Resource::uuidof(), resource.mut_void()) };
+        let hr = unsafe { self.GetBuffer::<Direct3D12::ID3D12Resource>(id) };
 
-        (resource, hr)
+        if let Ok(resource) = hr {
+            (unsafe { WeakPtr::from_raw(&mut resource) }, Ok(()))
+        } else {
+            (WeakPtr::null(), Err(hr.err().unwrap()))
+        }
     }
 
     //TODO: replace by present_flags
-    pub fn present(&self, interval: u32, flags: u32) -> HRESULT {
+    pub fn present(&self, interval: u32, flags: u32) -> runtime::Result<()> {
         unsafe { self.Present(interval, flags) }
     }
 
-    pub fn present_flags(&self, interval: u32, flags: SwapChainPresentFlags) -> HRESULT {
+    pub fn present_flags(
+        &self,
+        interval: u32,
+        flags: SwapChainPresentFlags,
+    ) -> runtime::Result<()> {
         unsafe { self.Present(interval, flags.bits()) }
     }
 }

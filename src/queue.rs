@@ -1,31 +1,34 @@
-use crate::{com::WeakPtr, sync::Fence, CommandList, HRESULT};
-use winapi::um::d3d12;
+use crate::{com::WeakPtr, sync::Fence, CommandList};
+use windows::{
+    runtime::{self, Interface},
+    Win32::Graphics::Direct3D12::{self, ID3D12CommandList},
+};
 
 #[repr(u32)]
 pub enum Priority {
-    Normal = d3d12::D3D12_COMMAND_QUEUE_PRIORITY_NORMAL,
-    High = d3d12::D3D12_COMMAND_QUEUE_PRIORITY_HIGH,
-    GlobalRealtime = d3d12::D3D12_COMMAND_QUEUE_PRIORITY_GLOBAL_REALTIME,
+    Normal = Direct3D12::D3D12_COMMAND_QUEUE_PRIORITY_NORMAL.0 as u32,
+    High = Direct3D12::D3D12_COMMAND_QUEUE_PRIORITY_HIGH.0 as u32,
+    GlobalRealtime = Direct3D12::D3D12_COMMAND_QUEUE_PRIORITY_GLOBAL_REALTIME.0 as u32,
 }
 
 bitflags! {
     pub struct CommandQueueFlags: u32 {
-        const DISABLE_GPU_TIMEOUT = d3d12::D3D12_COMMAND_QUEUE_FLAG_DISABLE_GPU_TIMEOUT;
+        const DISABLE_GPU_TIMEOUT = Direct3D12::D3D12_COMMAND_QUEUE_FLAG_DISABLE_GPU_TIMEOUT.0 as u32;
     }
 }
 
-pub type CommandQueue = WeakPtr<d3d12::ID3D12CommandQueue>;
+pub type CommandQueue = WeakPtr<Direct3D12::ID3D12CommandQueue>;
 
 impl CommandQueue {
     pub fn execute_command_lists(&self, command_lists: &[CommandList]) {
         let command_lists = command_lists
             .iter()
-            .map(CommandList::as_mut_ptr)
+            .map(|c| Some(c.0.cast::<ID3D12CommandList>().expect("Tried to execute command list lists containing objects other than command lists")))
             .collect::<Box<[_]>>();
         unsafe { self.ExecuteCommandLists(command_lists.len() as _, command_lists.as_ptr()) }
     }
 
-    pub fn signal(&self, fence: Fence, value: u64) -> HRESULT {
-        unsafe { self.Signal(fence.as_mut_ptr(), value) }
+    pub fn signal(&self, fence: Fence, value: u64) -> Result<(), runtime::Error> {
+        unsafe { self.Signal(fence, value) }
     }
 }

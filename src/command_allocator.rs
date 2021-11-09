@@ -1,9 +1,10 @@
 //! Command Allocator
 
-use crate::com::WeakPtr;
-use winapi::um::d3d12;
+use windows::Win32::Graphics::Direct3D12;
 
-pub type CommandAllocator = WeakPtr<d3d12::ID3D12CommandAllocator>;
+use crate::WeakPtr;
+
+pub type CommandAllocator = WeakPtr<Direct3D12::ID3D12CommandAllocator>;
 
 impl CommandAllocator {
     pub fn reset(&self) {
