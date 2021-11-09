@@ -20,9 +20,23 @@ implicit-link = []
 bitflags = "1"
 libloading = { version = "0.7", optional = true }
 
-[dependencies.winapi]
-version = "0.3"
-features = ["dxgi1_2","dxgi1_3","dxgi1_4","dxgidebug","d3d12","d3d12sdklayers","d3dcommon","d3dcompiler","dxgiformat","synchapi","winerror"]
+[dependencies.windows]
+version = "0.25.0"
+features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Direct3D11",
+    "Win32_Graphics_Direct3D12",
+    "Win32_Graphics_Dxgi",
+    "Win32_Graphics_Gdi",
+    "Win32_Graphics_Hlsl",
+    "Win32_Security",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Ole_Automation",
+    "Win32_System_SystemServices",
+    "Win32_System_Threading",
+    "Win32_System_WindowsProgramming",
+    "Win32_UI_WindowsAndMessaging",
+]
 
 [package.metadata.docs.rs]
 default-target = "x86_64-pc-windows-msvc"
