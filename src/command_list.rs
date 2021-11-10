@@ -261,7 +261,7 @@ impl GraphicsCommandList {
 
     pub fn set_index_buffer(&self, gpu_address: GpuAddress, size: u32, format: Format) {
         let ibv = Direct3D12::D3D12_INDEX_BUFFER_VIEW {
-            BufferLocation: gpu_address.StartAddress,
+            BufferLocation: gpu_address,
             SizeInBytes: size,
             Format: format,
         };
@@ -331,7 +331,7 @@ impl GraphicsCommandList {
         buffer_location: GpuAddress,
     ) {
         unsafe {
-            self.SetComputeRootConstantBufferView(root_index, buffer_location.StartAddress);
+            self.SetComputeRootConstantBufferView(root_index, buffer_location);
         }
     }
 
@@ -341,7 +341,7 @@ impl GraphicsCommandList {
         buffer_location: GpuAddress,
     ) {
         unsafe {
-            self.SetComputeRootShaderResourceView(root_index, buffer_location.StartAddress);
+            self.SetComputeRootShaderResourceView(root_index, buffer_location);
         }
     }
 
@@ -351,7 +351,7 @@ impl GraphicsCommandList {
         buffer_location: GpuAddress,
     ) {
         unsafe {
-            self.SetComputeRootUnorderedAccessView(root_index, buffer_location.StartAddress);
+            self.SetComputeRootUnorderedAccessView(root_index, buffer_location);
         }
     }
 
@@ -382,7 +382,7 @@ impl GraphicsCommandList {
         buffer_location: GpuAddress,
     ) {
         unsafe {
-            self.SetGraphicsRootConstantBufferView(root_index, buffer_location.StartAddress);
+            self.SetGraphicsRootConstantBufferView(root_index, buffer_location);
         }
     }
 
@@ -392,7 +392,7 @@ impl GraphicsCommandList {
         buffer_location: GpuAddress,
     ) {
         unsafe {
-            self.SetGraphicsRootShaderResourceView(root_index, buffer_location.StartAddress);
+            self.SetGraphicsRootShaderResourceView(root_index, buffer_location);
         }
     }
 
@@ -402,7 +402,7 @@ impl GraphicsCommandList {
         buffer_location: GpuAddress,
     ) {
         unsafe {
-            self.SetGraphicsRootUnorderedAccessView(root_index, buffer_location.StartAddress);
+            self.SetGraphicsRootUnorderedAccessView(root_index, buffer_location);
         }
     }
 

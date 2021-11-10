@@ -35,7 +35,7 @@ pub use crate::queue::*;
 pub use crate::resource::*;
 pub use crate::sync::*;
 
-pub type GpuAddress = Direct3D12::D3D12_GPU_VIRTUAL_ADDRESS_RANGE;
+pub type GpuAddress = u64;
 pub type Format = Dxgi::DXGI_FORMAT;
 pub type Rect = Foundation::RECT;
 pub type NodeMask = u32;
