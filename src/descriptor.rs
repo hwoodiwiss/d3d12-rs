@@ -1,6 +1,9 @@
-use crate::{com::WeakPtr, Blob, D3DResult, Error, TextureAddressMode};
+use crate::{com::WeakPtr, Blob, Error, TextureAddressMode};
 use std::{fmt, mem, ops::Range};
-use windows::Win32::Graphics::{Direct3D11, Direct3D12, Dxgi};
+use windows::{
+    runtime,
+    Win32::Graphics::{Direct3D11, Direct3D12, Dxgi},
+};
 
 pub type CpuDescriptor = Direct3D12::D3D12_CPU_DESCRIPTOR_HANDLE;
 pub type GpuDescriptor = Direct3D12::D3D12_GPU_DESCRIPTOR_HANDLE;
@@ -275,7 +278,7 @@ bitflags! {
 }
 
 pub type RootSignature = WeakPtr<Direct3D12::ID3D12RootSignature>;
-pub type BlobResult = D3DResult<(Blob, Error)>;
+pub type BlobResult = runtime::Result<(Blob, Error)>;
 
 #[cfg(feature = "libloading")]
 impl crate::D3D12Lib {
@@ -292,7 +295,7 @@ impl crate::D3D12Lib {
             Direct3D12::D3D_ROOT_SIGNATURE_VERSION,
             *mut *mut ID3DBlob,
             *mut *mut ID3DBlob,
-        ) -> crate::HRESULT;
+        ) -> u32;
 
         let desc = Direct3D12::D3D12_ROOT_SIGNATURE_DESC {
             NumParameters: parameters.len() as _,
@@ -314,8 +317,15 @@ impl crate::D3D12Lib {
                 error.mut_void() as *mut *mut _,
             )
         };
-
-        Ok(((blob, error), hr.ok()))
+        let hr = runtime::HRESULT(hr);
+        if hr.is_ok() {
+            Ok(Ok((blob, error)))
+        } else {
+            Ok(runtime::Result::Err(runtime::Error::new(
+                hr,
+                hr.message().as_str(),
+            )))
+        }
     }
 }
 
@@ -346,8 +356,8 @@ impl RootSignature {
             )
         };
 
-        if let Ok(_) = hr {
-            let wk_blob = match blob {
+        hr.map(|()| {
+            let wk_shader = match blob {
                 Some(mut blob) => unsafe { WeakPtr::from_raw(&mut blob) },
                 None => WeakPtr::<Direct3D11::ID3DBlob>::null(),
             };
@@ -355,10 +365,8 @@ impl RootSignature {
                 Some(mut err) => unsafe { WeakPtr::from_raw(&mut err) },
                 None => WeakPtr::<Direct3D11::ID3DBlob>::null(),
             };
-            ((wk_blob, wk_err), Ok(()))
-        } else {
-            ((WeakPtr::null(), WeakPtr::null()), Err(hr.err().unwrap()))
-        }
+            (wk_shader, wk_err)
+        })
     }
 }
 

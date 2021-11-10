@@ -1,8 +1,9 @@
 //! GPU Resource
 
-use crate::{com::WeakPtr, D3DResult, Rect};
+use crate::{com::WeakPtr, Rect};
+use core::ffi;
 use std::{ops::Range, ptr};
-use windows::Win32::Graphics::Direct3D12;
+use windows::{runtime, Win32::Graphics::Direct3D12};
 
 pub type Subresource = u32;
 
@@ -19,7 +20,7 @@ impl Resource {
         &self,
         subresource: Subresource,
         read_range: Option<Range<usize>>,
-    ) -> D3DResult<*mut ()> {
+    ) -> runtime::Result<*mut ffi::c_void> {
         let mut ptr = ptr::null_mut();
         let read_range = read_range.map(|r| Direct3D12::D3D12_RANGE {
             Begin: r.start,
@@ -31,7 +32,7 @@ impl Resource {
         };
         let hr = unsafe { self.Map(subresource, read, &mut ptr) };
 
-        (ptr as _, hr)
+        hr.map(|()| ptr)
     }
 
     pub fn unmap(&self, subresource: Subresource, write_range: Option<Range<usize>>) {

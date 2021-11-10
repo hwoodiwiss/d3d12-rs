@@ -1,4 +1,4 @@
-use crate::{com::WeakPtr, CommandQueue, D3DResult, Resource, SampleDesc};
+use crate::{com::WeakPtr, CommandQueue, Resource, SampleDesc};
 use std::{ffi::c_void, ptr};
 use windows::{
     runtime::{self, Interface},
@@ -79,30 +79,42 @@ impl DxgiLib {
     pub fn create_factory2(
         &self,
         flags: FactoryCreationFlags,
-    ) -> Result<D3DResult<Factory4>, libloading::Error> {
-        type Fun = extern "system" fn(
-            u32,
-            &runtime::GUID,
-            *mut *mut std::ffi::c_void,
-        ) -> runtime::Result<()>;
+    ) -> Result<runtime::Result<Factory4>, libloading::Error> {
+        type Fun = extern "system" fn(u32, &runtime::GUID, *mut *mut std::ffi::c_void) -> u32;
         let mut factory = Factory4::null();
         let hr = unsafe {
             let func: libloading::Symbol<Fun> = self.lib.get(b"CreateDXGIFactory2")?;
             func(flags.bits(), &Dxgi::IDXGIFactory4::IID, factory.mut_void())
         };
 
-        Ok((factory, hr))
+        let hr = runtime::HRESULT(hr);
+        if hr.is_ok() {
+            Ok(Ok(factory))
+        } else {
+            Ok(runtime::Result::Err(runtime::Error::new(
+                hr,
+                hr.message().as_str(),
+            )))
+        }
     }
 
-    pub fn get_debug_interface1(&self) -> Result<D3DResult<InfoQueue>, libloading::Error> {
-        type Fun = extern "system" fn(u32, &runtime::GUID, *mut *mut c_void) -> runtime::Result<()>;
+    pub fn get_debug_interface1(&self) -> Result<runtime::Result<InfoQueue>, libloading::Error> {
+        type Fun = extern "system" fn(u32, &runtime::GUID, *mut *mut c_void) -> u32;
 
         let mut queue = InfoQueue::null();
         let hr = unsafe {
             let func: libloading::Symbol<Fun> = self.lib.get(b"DXGIGetDebugInterface1")?;
             func(0, &Dxgi::IDXGIInfoQueue::IID, queue.mut_void())
         };
-        Ok((queue, hr))
+        let hr = runtime::HRESULT(hr);
+        if hr.is_ok() {
+            Ok(Ok(queue))
+        } else {
+            Ok(runtime::Result::Err(runtime::Error::new(
+                hr,
+                hr.message().as_str(),
+            )))
+        }
     }
 }
 
@@ -128,7 +140,7 @@ impl Factory2 {
         queue: CommandQueue,
         hwnd: HWND,
         desc: &SwapchainDesc,
-    ) -> D3DResult<SwapChain1> {
+    ) -> runtime::Result<SwapChain1> {
         let desc = Dxgi::DXGI_SWAP_CHAIN_DESC1 {
             AlphaMode: Dxgi::DXGI_ALPHA_MODE(desc.alpha_mode as _),
             BufferCount: desc.buffer_count,
@@ -148,43 +160,31 @@ impl Factory2 {
 
         let hr = unsafe {
             let mut device: Option<IDXGIDevice2> = None;
-            queue.GetDevice(&mut device);
+            queue.GetDevice(&mut device)?;
             let device = device.unwrap();
             self.CreateSwapChainForHwnd(device, hwnd, &desc, ptr::null(), None)
         };
 
-        if let Ok(mut swap_chain) = hr {
-            (unsafe { WeakPtr::from_raw(&mut swap_chain) }, Ok(()))
-        } else {
-            (WeakPtr::null(), Err(hr.err().unwrap()))
-        }
+        hr.map(|mut sc| unsafe { WeakPtr::from_raw(&mut sc) })
     }
 }
 
 impl Factory4 {
     #[cfg(feature = "implicit-link")]
-    pub fn create(flags: FactoryCreationFlags) -> D3DResult<Self> {
+    pub fn create(flags: FactoryCreationFlags) -> runtime::Result<Self> {
         let hr = unsafe { Dxgi::CreateDXGIFactory2::<Dxgi::IDXGIFactory4>(flags.bits()) };
 
-        if let Ok(mut factory) = hr {
-            (unsafe { WeakPtr::from_raw(&mut factory) }, Ok(()))
-        } else {
-            (WeakPtr::null(), Err(hr.err().unwrap()))
-        }
+        hr.map(|mut fac| unsafe { WeakPtr::from_raw(&mut fac) })
     }
 
     pub fn as_factory2(&self) -> Factory2 {
         unsafe { Factory2::from_raw(self.as_mut_ptr() as *mut _) }
     }
 
-    pub fn enumerate_adapters(&self, id: u32) -> D3DResult<Adapter1> {
+    pub fn enumerate_adapters(&self, id: u32) -> runtime::Result<Adapter1> {
         let hr = unsafe { self.EnumAdapters1(id) };
 
-        if let Ok(mut adapter) = hr {
-            (unsafe { WeakPtr::from_raw(&mut adapter) }, Ok(()))
-        } else {
-            (WeakPtr::null(), Err(hr.err().unwrap()))
-        }
+        hr.map(|mut adapter| unsafe { WeakPtr::from_raw(&mut adapter) })
     }
 }
 
@@ -203,14 +203,10 @@ bitflags! {
 }
 
 impl SwapChain {
-    pub fn get_buffer(&self, id: u32) -> D3DResult<Resource> {
+    pub fn get_buffer(&self, id: u32) -> runtime::Result<Resource> {
         let hr = unsafe { self.GetBuffer::<Direct3D12::ID3D12Resource>(id) };
 
-        if let Ok(mut resource) = hr {
-            (unsafe { WeakPtr::from_raw(&mut resource) }, Ok(()))
-        } else {
-            (WeakPtr::null(), Err(hr.err().unwrap()))
-        }
+        hr.map(|mut res| unsafe { WeakPtr::from_raw(&mut res) })
     }
 
     //TODO: replace by present_flags

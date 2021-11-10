@@ -5,7 +5,7 @@ use std::ffi::CStr;
 
 use windows::Win32::Foundation;
 use windows::Win32::Graphics::Dxgi;
-use windows::{runtime::HRESULT, Win32::Graphics::Direct3D11, Win32::Graphics::Direct3D12};
+use windows::{Win32::Graphics::Direct3D11, Win32::Graphics::Direct3D12};
 
 mod com;
 mod command_allocator;
@@ -35,7 +35,6 @@ pub use crate::queue::*;
 pub use crate::resource::*;
 pub use crate::sync::*;
 
-pub type D3DResult<T> = (T, windows::runtime::Result<()>);
 pub type GpuAddress = Direct3D12::D3D12_GPU_VIRTUAL_ADDRESS_RANGE;
 pub type Format = Dxgi::DXGI_FORMAT;
 pub type Rect = Foundation::RECT;

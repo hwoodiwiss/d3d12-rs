@@ -1,8 +1,9 @@
 //! Pipeline state
 
-use crate::{com::WeakPtr, Blob, D3DResult, Error};
+use crate::{com::WeakPtr, Blob, Error};
 
 use std::{ops::Deref, ptr};
+use windows::runtime;
 use windows::Win32::Graphics::Direct3D11;
 use windows::Win32::Graphics::Direct3D12;
 use windows::Win32::Graphics::Hlsl;
@@ -58,7 +59,7 @@ impl Shader {
         target: &str,
         entry: &str,
         flags: ShaderCompileFlags,
-    ) -> D3DResult<(Blob, Error)> {
+    ) -> runtime::Result<(Blob, Error)> {
         let mut shader: Option<Direct3D11::ID3DBlob> = None;
         let mut error: Option<Direct3D11::ID3DBlob> = None;
 
@@ -78,7 +79,7 @@ impl Shader {
             )
         };
 
-        if let Ok(_) = hr {
+        hr.map(|()| {
             let wk_shader = match shader {
                 Some(mut blob) => unsafe { WeakPtr::from_raw(&mut blob) },
                 None => WeakPtr::<Direct3D11::ID3DBlob>::null(),
@@ -87,10 +88,8 @@ impl Shader {
                 Some(mut err) => unsafe { WeakPtr::from_raw(&mut err) },
                 None => WeakPtr::<Direct3D11::ID3DBlob>::null(),
             };
-            ((wk_shader, wk_err), Ok(()))
-        } else {
-            ((WeakPtr::null(), WeakPtr::null()), Err(hr.err().unwrap()))
-        }
+            (wk_shader, wk_err)
+        })
     }
 }
 
