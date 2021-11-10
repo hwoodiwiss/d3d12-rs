@@ -172,9 +172,7 @@ impl Factory2 {
 impl Factory4 {
     #[cfg(feature = "implicit-link")]
     pub fn create(flags: FactoryCreationFlags) -> runtime::Result<Self> {
-        let hr = unsafe { Dxgi::CreateDXGIFactory2::<Dxgi::IDXGIFactory4>(flags.bits()) };
-
-        hr.map(|mut fac| unsafe { WeakPtr::from_raw(&mut fac) })
+        unsafe { Dxgi::CreateDXGIFactory2::<Self>(flags.bits()) }
     }
 
     pub fn as_factory2(&self) -> Factory2 {
@@ -204,9 +202,7 @@ bitflags! {
 
 impl SwapChain {
     pub fn get_buffer(&self, id: u32) -> runtime::Result<Resource> {
-        let hr = unsafe { self.GetBuffer::<Direct3D12::ID3D12Resource>(id) };
-
-        hr.map(|mut res| unsafe { WeakPtr::from_raw(&mut res) })
+        unsafe { self.GetBuffer::<Resource>(id) }
     }
 
     //TODO: replace by present_flags

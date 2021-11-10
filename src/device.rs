@@ -60,7 +60,7 @@ impl Device {
         adapter: WeakPtr<I>,
         feature_level: crate::FeatureLevel,
     ) -> runtime::Result<Self> {
-        let mut device: Option<Direct3D12::ID3D12Device> = None;
+        let mut device: Option<Device> = None;
         let hr = unsafe {
             Direct3D12::D3D12CreateDevice(
                 adapter.as_unknown(),
@@ -69,7 +69,7 @@ impl Device {
             )
         };
 
-        hr.map(|()| unsafe { WeakPtr::from_raw(&mut device.unwrap()) })
+        hr.map(|()| device.unwrap())
     }
 
     pub fn create_heap(
@@ -96,13 +96,11 @@ impl Device {
         &self,
         list_type: CmdListType,
     ) -> runtime::Result<CommandAllocator> {
-        let hr = unsafe {
-            self.CreateCommandAllocator::<Direct3D12::ID3D12CommandAllocator>(
-                Direct3D12::D3D12_COMMAND_LIST_TYPE(list_type as _),
-            )
-        };
-
-        hr.map(|mut alloc| unsafe { WeakPtr::from_raw(&mut alloc) })
+        unsafe {
+            self.CreateCommandAllocator::<CommandAllocator>(Direct3D12::D3D12_COMMAND_LIST_TYPE(
+                list_type as _,
+            ))
+        }
     }
 
     pub fn create_command_queue(
@@ -119,9 +117,7 @@ impl Device {
             NodeMask: node_mask,
         };
 
-        let hr = unsafe { self.CreateCommandQueue::<Direct3D12::ID3D12CommandQueue>(&desc) };
-
-        hr.map(|mut queue| unsafe { WeakPtr::from_raw(&mut queue) })
+        unsafe { self.CreateCommandQueue::<CommandQueue>(&desc) }
     }
 
     pub fn create_descriptor_heap(
@@ -138,9 +134,7 @@ impl Device {
             NodeMask: node_mask,
         };
 
-        let hr = unsafe { self.CreateDescriptorHeap::<Direct3D12::ID3D12DescriptorHeap>(&desc) };
-
-        hr.map(|mut heap| unsafe { WeakPtr::from_raw(&mut heap) })
+        unsafe { self.CreateDescriptorHeap::<DescriptorHeap>(&desc) }
     }
 
     pub fn get_descriptor_increment_size(&self, heap_type: DescriptorHeapType) -> u32 {
@@ -158,16 +152,14 @@ impl Device {
         initial: PipelineState,
         node_mask: NodeMask,
     ) -> runtime::Result<GraphicsCommandList> {
-        let hr = unsafe {
-            self.CreateCommandList::<_, _, Direct3D12::ID3D12GraphicsCommandList>(
+        unsafe {
+            self.CreateCommandList::<_, _, GraphicsCommandList>(
                 node_mask,
                 Direct3D12::D3D12_COMMAND_LIST_TYPE(list_type as _),
                 allocator,
                 initial,
             )
-        };
-
-        hr.map(|mut cmd_list| unsafe { WeakPtr::from_raw(&mut cmd_list) })
+        }
     }
 
     pub fn create_query_heap(
@@ -182,10 +174,10 @@ impl Device {
             NodeMask: node_mask,
         };
 
-        let mut query_heap: Option<Direct3D12::ID3D12QueryHeap> = None;
+        let mut query_heap: Option<QueryHeap> = None;
         let hr = unsafe { self.CreateQueryHeap(&desc, &mut query_heap) };
 
-        hr.map(|()| unsafe { WeakPtr::from_raw(&mut query_heap.unwrap()) })
+        hr.map(|()| query_heap.unwrap())
     }
 
     pub fn create_graphics_pipeline_state(
@@ -226,10 +218,7 @@ impl Device {
             }
         };
 
-        let hr =
-            unsafe { self.CreateComputePipelineState::<Direct3D12::ID3D12PipelineState>(&desc) };
-
-        hr.map(|mut pso| unsafe { WeakPtr::from_raw(&mut pso) })
+        unsafe { self.CreateComputePipelineState::<PipelineState>(&desc) }
     }
 
     pub fn create_sampler(
@@ -266,15 +255,13 @@ impl Device {
         blob: Blob,
         node_mask: NodeMask,
     ) -> runtime::Result<RootSignature> {
-        let hr = unsafe {
-            self.CreateRootSignature::<Direct3D12::ID3D12RootSignature>(
+        unsafe {
+            self.CreateRootSignature::<RootSignature>(
                 node_mask,
                 blob.GetBufferPointer(),
                 blob.GetBufferSize(),
             )
-        };
-
-        hr.map(|mut rs| unsafe { WeakPtr::from_raw(&mut rs) })
+        }
     }
 
     pub fn create_command_signature(
@@ -291,16 +278,16 @@ impl Device {
             NodeMask: node_mask,
         };
 
-        let mut signature: Option<Direct3D12::ID3D12CommandSignature> = None;
+        let mut signature: Option<CommandSignature> = None;
         let hr = unsafe {
-            self.CreateCommandSignature::<_, Direct3D12::ID3D12CommandSignature>(
+            self.CreateCommandSignature::<_, CommandSignature>(
                 &desc,
                 root_signature,
                 &mut signature,
             )
         };
 
-        hr.map(|()| unsafe { WeakPtr::from_raw(&mut signature.unwrap()) })
+        hr.map(|()| signature.unwrap())
     }
 
     pub fn create_render_target_view(
@@ -316,10 +303,6 @@ impl Device {
 
     // TODO: interface not complete
     pub fn create_fence(&self, initial: u64) -> runtime::Result<Fence> {
-        let hr = unsafe {
-            self.CreateFence::<Direct3D12::ID3D12Fence>(initial, Direct3D12::D3D12_FENCE_FLAG_NONE)
-        };
-
-        hr.map(|mut fence| unsafe { WeakPtr::from_raw(&mut fence) })
+        unsafe { self.CreateFence::<Fence>(initial, Direct3D12::D3D12_FENCE_FLAG_NONE) }
     }
 }
