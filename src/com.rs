@@ -6,7 +6,7 @@ use std::{
     ops::Deref,
     ptr,
 };
-use windows::runtime::{self, IUnknown, Interface, IntoParam, Param};
+use windows::runtime::{self, IUnknown, Interface, IntoParam, Param, GUID};
 
 #[repr(transparent)]
 pub struct WeakPtr<T>(*mut T);
@@ -104,4 +104,10 @@ impl<T> Hash for WeakPtr<T> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.0.hash(state);
     }
+}
+
+unsafe impl<T: Interface> Interface for WeakPtr<T> {
+    type Vtable = T::Vtable;
+
+    const IID: GUID = T::IID;
 }
