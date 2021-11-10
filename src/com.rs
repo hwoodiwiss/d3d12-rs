@@ -48,12 +48,9 @@ impl<T: Interface> WeakPtr<T> {
     where
         U: Interface,
     {
-        let hr = self.as_unknown().cast::<U>();
-        if hr.is_ok() {
-            Ok(WeakPtr(self.0 as *mut U))
-        } else {
-            Err(hr.err().unwrap())
-        }
+        self.as_unknown()
+            .cast::<U>()
+            .map(|mut u| WeakPtr::from_raw(&mut u))
     }
 
     // Destroying one instance of the WeakPtr will invalidate all
