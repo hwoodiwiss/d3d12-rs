@@ -73,16 +73,8 @@ impl DxgiLib {
         unsafe { libloading::Library::new("dxgi.dll").map(|lib| DxgiLib { lib }) }
     }
 
-    pub fn create_factory2(
-        &self,
-        flags: FactoryCreationFlags,
-    ) -> Result<runtime::Result<Factory4>, libloading::Error> {
-        let hr = unsafe { Dxgi::CreateDXGIFactory2::<Factory4>(flags.bits()) };
-
-        match hr {
-            Ok(factory) => Ok(Ok(factory)),
-            Err(err) => Ok(Err(err)),
-        }
+    pub fn create_factory2(&self, flags: FactoryCreationFlags) -> runtime::Result<Factory4> {
+        unsafe { Dxgi::CreateDXGIFactory2::<Factory4>(flags.bits()) }
     }
 
     pub fn get_debug_interface1(&self) -> Result<runtime::Result<InfoQueue>, libloading::Error> {
