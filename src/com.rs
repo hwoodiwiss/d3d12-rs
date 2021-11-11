@@ -52,9 +52,7 @@ impl<T: Interface> WeakPtr<T> {
     where
         U: Interface,
     {
-        self.as_unknown()
-            .cast::<U>()
-            .map(|mut u| WeakPtr::from_raw(&mut u))
+        (*self.0).cast::<U>().map(|mut u| WeakPtr::from_raw(&mut u))
     }
 
     // Destroying one instance of the WeakPtr will invalidate all
