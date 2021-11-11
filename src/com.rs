@@ -40,7 +40,11 @@ impl<T> WeakPtr<T> {
 impl<T: Interface> WeakPtr<T> {
     pub unsafe fn as_unknown(&self) -> &IUnknown {
         debug_assert!(!self.is_null());
-        &*(self.0 as *mut IUnknown)
+        println!("{:?}", self.0);
+        let uk = &*(self.0 as *mut IUnknown);
+        println!("{:?}", uk);
+
+        uk
     }
 
     // Cast creates a new WeakPtr requiring explicit destroy call.
