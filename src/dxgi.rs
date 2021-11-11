@@ -4,10 +4,7 @@ use windows::{
     runtime::{self, Interface},
     Win32::{
         Foundation::{self, HWND},
-        Graphics::{
-            Direct3D12,
-            Dxgi::{self, IDXGIDevice2},
-        },
+        Graphics::Dxgi::{self, IDXGIDevice2},
     },
 };
 
@@ -81,10 +78,14 @@ impl DxgiLib {
         flags: FactoryCreationFlags,
     ) -> Result<runtime::Result<Factory4>, libloading::Error> {
         type Fun = extern "system" fn(u32, *const runtime::GUID, *mut *mut std::ffi::c_void) -> u32;
-        let mut factory = Factory4::null();
+        let factory = Factory4::null();
         let hr = unsafe {
             let func: libloading::Symbol<Fun> = self.lib.get(b"CreateDXGIFactory2")?;
-            func(flags.bits(), &Dxgi::IDXGIFactory4::IID, factory.mut_void())
+            func(
+                flags.bits(),
+                &Dxgi::IDXGIFactory4::IID,
+                factory.as_mut_ptr() as *mut *mut _,
+            )
         };
 
         let hr = runtime::HRESULT(hr);
