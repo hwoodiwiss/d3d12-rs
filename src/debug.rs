@@ -1,6 +1,5 @@
 use crate::com::WeakPtr;
 use windows::runtime::{self, Interface};
-#[cfg(any(feature = "libloading", feature = "implicit-link"))]
 use windows::Win32::Graphics::Direct3D12;
 
 pub type Debug = WeakPtr<Direct3D12::ID3D12Debug>;

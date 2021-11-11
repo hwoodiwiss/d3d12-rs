@@ -41,7 +41,7 @@ impl<T: Interface> WeakPtr<T> {
     pub unsafe fn as_unknown(&self) -> &IUnknown {
         debug_assert!(!self.is_null());
         println!("{:?}", self.0);
-        let uk = &*(self.0 as *mut IUnknown);
+        let uk = mem::transmute_copy(self);
         println!("{:?}", uk);
 
         uk
