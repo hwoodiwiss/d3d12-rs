@@ -80,7 +80,7 @@ impl DxgiLib {
         &self,
         flags: FactoryCreationFlags,
     ) -> Result<runtime::Result<Factory4>, libloading::Error> {
-        type Fun = extern "system" fn(u32, &runtime::GUID, *mut *mut std::ffi::c_void) -> u32;
+        type Fun = extern "system" fn(u32, *const runtime::GUID, *mut *mut std::ffi::c_void) -> u32;
         let mut factory = Factory4::null();
         let hr = unsafe {
             let func: libloading::Symbol<Fun> = self.lib.get(b"CreateDXGIFactory2")?;
@@ -99,7 +99,7 @@ impl DxgiLib {
     }
 
     pub fn get_debug_interface1(&self) -> Result<runtime::Result<InfoQueue>, libloading::Error> {
-        type Fun = extern "system" fn(u32, &runtime::GUID, *mut *mut c_void) -> u32;
+        type Fun = extern "system" fn(u32, *const runtime::GUID, *mut *mut c_void) -> u32;
 
         let mut queue = InfoQueue::null();
         let hr = unsafe {
