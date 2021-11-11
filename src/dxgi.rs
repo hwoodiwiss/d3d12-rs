@@ -77,25 +77,11 @@ impl DxgiLib {
         &self,
         flags: FactoryCreationFlags,
     ) -> Result<runtime::Result<Factory4>, libloading::Error> {
-        type Fun = extern "system" fn(u32, *const runtime::GUID, *mut *mut std::ffi::c_void) -> u32;
-        let factory = Factory4::null();
-        let hr = unsafe {
-            let func: libloading::Symbol<Fun> = self.lib.get(b"CreateDXGIFactory2")?;
-            func(
-                flags.bits(),
-                &Dxgi::IDXGIFactory4::IID,
-                factory.as_mut_ptr() as *mut *mut _,
-            )
-        };
+        let hr = unsafe { Dxgi::CreateDXGIFactory2::<Factory4>(flags.bits()) };
 
-        let hr = runtime::HRESULT(hr);
-        if hr.is_ok() {
-            Ok(Ok(factory))
-        } else {
-            Ok(runtime::Result::Err(runtime::Error::new(
-                hr,
-                hr.message().as_str(),
-            )))
+        match hr {
+            Ok(factory) => Ok(Ok(factory)),
+            Err(err) => Ok(Err(err)),
         }
     }
 
