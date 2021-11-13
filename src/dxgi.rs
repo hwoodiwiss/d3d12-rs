@@ -1,5 +1,5 @@
-use crate::{com::WeakPtr, CommandQueue, Resource, SampleDesc};
-use std::{ffi::c_void, ptr};
+use crate::{CommandQueue, Resource, SampleDesc};
+use std::ptr;
 use windows::{
     runtime::{self, Interface},
     Win32::{
@@ -53,13 +53,13 @@ bitflags! {
     }
 }
 
-pub type Adapter1 = WeakPtr<Dxgi::IDXGIAdapter1>;
-pub type Factory2 = WeakPtr<Dxgi::IDXGIFactory2>;
-pub type Factory4 = WeakPtr<Dxgi::IDXGIFactory4>;
-pub type InfoQueue = WeakPtr<Dxgi::IDXGIInfoQueue>;
-pub type SwapChain = WeakPtr<Dxgi::IDXGISwapChain>;
-pub type SwapChain1 = WeakPtr<Dxgi::IDXGISwapChain1>;
-pub type SwapChain3 = WeakPtr<Dxgi::IDXGISwapChain3>;
+pub type Adapter1 = Dxgi::IDXGIAdapter1;
+pub type Factory2 = Dxgi::IDXGIFactory2;
+pub type Factory4 = Dxgi::IDXGIFactory4;
+pub type InfoQueue = Dxgi::IDXGIInfoQueue;
+pub type SwapChain = Dxgi::IDXGISwapChain;
+pub type SwapChain1 = Dxgi::IDXGISwapChain1;
+pub type SwapChain3 = Dxgi::IDXGISwapChain3;
 
 #[cfg(feature = "libloading")]
 #[derive(Debug)]
@@ -78,21 +78,13 @@ impl DxgiLib {
     }
 
     pub fn get_debug_interface1(&self) -> Result<runtime::Result<InfoQueue>, libloading::Error> {
-        type Fun = extern "system" fn(u32, *const runtime::GUID, *mut *mut c_void) -> u32;
-
-        let mut queue = InfoQueue::null();
-        let hr = unsafe {
-            let func: libloading::Symbol<Fun> = self.lib.get(b"DXGIGetDebugInterface1")?;
-            func(0, &Dxgi::IDXGIInfoQueue::IID, queue.mut_void())
-        };
-        let hr = runtime::HRESULT(hr);
-        if hr.is_ok() {
-            Ok(Ok(queue))
-        } else {
-            Ok(runtime::Result::Err(runtime::Error::new(
-                hr,
-                hr.message().as_str(),
-            )))
+        let hr = unsafe { Dxgi::DXGIGetDebugInterface1::<InfoQueue>(0) };
+        match hr {
+            Ok(queue) => Ok(Ok(queue)),
+            Err(err) => Ok(runtime::Result::Err(runtime::Error::new(
+                err.code(),
+                err.message().as_str(),
+            ))),
         }
     }
 }
@@ -112,9 +104,18 @@ pub struct SwapchainDesc {
     pub flags: u32,
 }
 
-impl Factory2 {
+pub trait IFactory2 {
+    fn create_swapchain_for_hwnd(
+        &self,
+        queue: CommandQueue,
+        hwnd: HWND,
+        desc: &SwapchainDesc,
+    ) -> runtime::Result<SwapChain1>;
+}
+
+impl IFactory2 for Factory2 {
     // TODO: interface not complete
-    pub fn create_swapchain_for_hwnd(
+    fn create_swapchain_for_hwnd(
         &self,
         queue: CommandQueue,
         hwnd: HWND,
@@ -137,31 +138,35 @@ impl Factory2 {
             SwapEffect: Dxgi::DXGI_SWAP_EFFECT(desc.swap_effect as _),
         };
 
-        let hr = unsafe {
+        unsafe {
             let mut device: Option<IDXGIDevice2> = None;
             queue.GetDevice(&mut device)?;
             let device = device.unwrap();
             self.CreateSwapChainForHwnd(device, hwnd, &desc, ptr::null(), None)
-        };
-
-        hr.map(|mut sc| unsafe { WeakPtr::from_raw(&mut sc) })
+        }
     }
 }
 
-impl Factory4 {
+pub trait IFactory4 {
     #[cfg(feature = "implicit-link")]
-    pub fn create(flags: FactoryCreationFlags) -> runtime::Result<Self> {
+    fn create(flags: FactoryCreationFlags) -> runtime::Result<Factory4>;
+
+    fn as_factory2(&self) -> Factory2;
+    fn enumerate_adapters(&self, id: u32) -> runtime::Result<Adapter1>;
+}
+
+impl IFactory4 for Factory4 {
+    #[cfg(feature = "implicit-link")]
+    fn create(flags: FactoryCreationFlags) -> runtime::Result<Self> {
         unsafe { Dxgi::CreateDXGIFactory2::<Self>(flags.bits()) }
     }
 
-    pub fn as_factory2(&self) -> Factory2 {
-        unsafe { Factory2::from_raw(self.as_mut_ptr() as *mut _) }
+    fn as_factory2(&self) -> Factory2 {
+        self.cast::<Factory2>().unwrap()
     }
 
-    pub fn enumerate_adapters(&self, id: u32) -> runtime::Result<Adapter1> {
-        let hr = unsafe { self.EnumAdapters1(id) };
-
-        hr.map(|mut adapter| unsafe { WeakPtr::from_raw(&mut adapter) })
+    fn enumerate_adapters(&self, id: u32) -> runtime::Result<Adapter1> {
+        unsafe { self.EnumAdapters1(id) }
     }
 }
 
@@ -179,37 +184,48 @@ bitflags! {
     }
 }
 
-impl SwapChain {
-    pub fn get_buffer(&self, id: u32) -> runtime::Result<Resource> {
+pub trait ISwapChain {
+    fn get_buffer(&self, id: u32) -> runtime::Result<Resource>;
+    fn present(&self, interval: u32, flags: u32) -> runtime::Result<()>;
+    fn present_flags(&self, interval: u32, flags: SwapChainPresentFlags) -> runtime::Result<()>;
+}
+
+impl ISwapChain for SwapChain {
+    fn get_buffer(&self, id: u32) -> runtime::Result<Resource> {
         unsafe { self.GetBuffer::<Resource>(id) }
     }
 
     //TODO: replace by present_flags
-    pub fn present(&self, interval: u32, flags: u32) -> runtime::Result<()> {
+    fn present(&self, interval: u32, flags: u32) -> runtime::Result<()> {
         unsafe { self.Present(interval, flags) }
     }
 
-    pub fn present_flags(
-        &self,
-        interval: u32,
-        flags: SwapChainPresentFlags,
-    ) -> runtime::Result<()> {
+    fn present_flags(&self, interval: u32, flags: SwapChainPresentFlags) -> runtime::Result<()> {
         unsafe { self.Present(interval, flags.bits()) }
     }
 }
 
-impl SwapChain1 {
-    pub fn as_swapchain0(&self) -> SwapChain {
-        unsafe { SwapChain::from_raw(self.as_mut_ptr() as *mut _) }
+pub trait ISwapChain1 {
+    fn as_swapchain0(&self) -> SwapChain;
+}
+
+impl ISwapChain1 for SwapChain1 {
+    fn as_swapchain0(&self) -> SwapChain {
+        self.cast::<SwapChain>().unwrap()
     }
 }
 
-impl SwapChain3 {
-    pub fn as_swapchain0(&self) -> SwapChain {
-        unsafe { SwapChain::from_raw(self.as_mut_ptr() as *mut _) }
+pub trait ISwapChain3 {
+    fn as_swapchain0(&self) -> SwapChain;
+    fn get_current_back_buffer_index(&self) -> u32;
+}
+
+impl ISwapChain3 for SwapChain3 {
+    fn as_swapchain0(&self) -> SwapChain {
+        self.cast::<SwapChain>().unwrap()
     }
 
-    pub fn get_current_back_buffer_index(&self) -> u32 {
+    fn get_current_back_buffer_index(&self) -> u32 {
         unsafe { self.GetCurrentBackBufferIndex() }
     }
 }

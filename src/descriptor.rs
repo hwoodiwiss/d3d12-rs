@@ -1,5 +1,5 @@
-use crate::{com::WeakPtr, Blob, Error, TextureAddressMode};
-use std::{fmt, mem, ops::Range};
+use crate::{Blob, Error, TextureAddressMode};
+use std::{fmt, mem, ops::Range, ptr};
 use windows::{
     runtime,
     Win32::Graphics::{Direct3D11, Direct3D12, Dxgi},
@@ -29,14 +29,19 @@ bitflags! {
     }
 }
 
-pub type DescriptorHeap = WeakPtr<Direct3D12::ID3D12DescriptorHeap>;
+pub type DescriptorHeap = Direct3D12::ID3D12DescriptorHeap;
 
-impl DescriptorHeap {
-    pub fn start_cpu_descriptor(&self) -> CpuDescriptor {
+pub trait IDescriptorHeap {
+    fn start_cpu_descriptor(&self) -> CpuDescriptor;
+    fn start_gpu_descriptor(&self) -> GpuDescriptor;
+}
+
+impl IDescriptorHeap for DescriptorHeap {
+    fn start_cpu_descriptor(&self) -> CpuDescriptor {
         unsafe { self.GetCPUDescriptorHandleForHeapStart() }
     }
 
-    pub fn start_gpu_descriptor(&self) -> GpuDescriptor {
+    fn start_gpu_descriptor(&self) -> GpuDescriptor {
         unsafe { self.GetGPUDescriptorHandleForHeapStart() }
     }
 }
@@ -277,8 +282,8 @@ bitflags! {
     }
 }
 
-pub type RootSignature = WeakPtr<Direct3D12::ID3D12RootSignature>;
-pub type BlobResult = runtime::Result<(Blob, Error)>;
+pub type RootSignature = Direct3D12::ID3D12RootSignature;
+pub type BlobResult = runtime::Result<(Option<Blob>, Option<Error>)>;
 
 #[cfg(feature = "libloading")]
 impl crate::D3D12Lib {
@@ -305,19 +310,32 @@ impl crate::D3D12Lib {
             Flags: Direct3D12::D3D12_ROOT_SIGNATURE_FLAGS(flags.bits()),
         };
 
-        let mut blob = Blob::null();
-        let mut error = Error::null();
+        let mut blob = ptr::null_mut();
+        let mut error = ptr::null_mut();
         let hr = unsafe {
             let func: libloading::Symbol<Fun> =
                 self.lib.get(b"Direct3D12SerializeRootSignature")?;
             func(
                 &desc,
                 Direct3D12::D3D_ROOT_SIGNATURE_VERSION(version as _),
-                blob.mut_void() as *mut *mut _,
-                error.mut_void() as *mut *mut _,
+                &mut blob,
+                &mut error,
             )
         };
         let hr = runtime::HRESULT(hr);
+
+        let blob = if let Some(blob) = ptr::NonNull::new(blob) {
+            Some(unsafe { blob.as_ref().clone() })
+        } else {
+            None
+        };
+
+        let error = if let Some(error) = ptr::NonNull::new(error) {
+            Some(unsafe { error.as_ref().clone() })
+        } else {
+            None
+        };
+
         if hr.is_ok() {
             Ok(Ok((blob, error)))
         } else {
@@ -329,9 +347,19 @@ impl crate::D3D12Lib {
     }
 }
 
-impl RootSignature {
+pub trait IRootSignature {
     #[cfg(feature = "implicit-link")]
-    pub fn serialize(
+    fn serialize(
+        version: RootSignatureVersion,
+        parameters: &mut [RootParameter],
+        static_samplers: &[StaticSampler],
+        flags: RootSignatureFlags,
+    ) -> BlobResult;
+}
+
+impl IRootSignature for RootSignature {
+    #[cfg(feature = "implicit-link")]
+    fn serialize(
         version: RootSignatureVersion,
         parameters: &mut [RootParameter],
         static_samplers: &[StaticSampler],
@@ -356,17 +384,7 @@ impl RootSignature {
             )
         };
 
-        hr.map(|()| {
-            let wk_shader = match blob {
-                Some(mut blob) => unsafe { WeakPtr::from_raw(&mut blob) },
-                None => WeakPtr::<Direct3D11::ID3DBlob>::null(),
-            };
-            let wk_err = match error {
-                Some(mut err) => unsafe { WeakPtr::from_raw(&mut err) },
-                None => WeakPtr::<Direct3D11::ID3DBlob>::null(),
-            };
-            (wk_shader, wk_err)
-        })
+        hr.map(|()| (blob, error))
     }
 }
 

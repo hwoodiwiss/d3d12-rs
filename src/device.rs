@@ -1,7 +1,6 @@
 //! Device
 
 use crate::{
-    com::WeakPtr,
     command_list::{CmdListType, CommandSignature, IndirectArgument},
     descriptor::{CpuDescriptor, DescriptorHeapFlags, DescriptorHeapType, RenderTargetViewDesc},
     heap::{Heap, HeapFlags, HeapProperties},
@@ -15,55 +14,139 @@ use windows::{
     Win32::Graphics::{Direct3D11, Direct3D12},
 };
 
-pub type Device = WeakPtr<Direct3D12::ID3D12Device>;
+pub type Device = Direct3D12::ID3D12Device;
 
 #[cfg(feature = "libloading")]
 impl crate::D3D12Lib {
     pub fn create_device<I: Interface>(
         &self,
-        adapter: WeakPtr<I>,
+        adapter: I,
         feature_level: crate::FeatureLevel,
     ) -> Result<runtime::Result<Device>, libloading::Error> {
-        type Fun = extern "system" fn(
-            *mut IUnknown,
-            Direct3D11::D3D_FEATURE_LEVEL,
-            &runtime::GUID,
-            *mut *mut std::ffi::c_void,
-        ) -> u32;
-
-        let mut device = Device::null();
+        let mut device = None;
         let hr = unsafe {
-            let func: libloading::Symbol<Fun> = self.lib.get(b"Direct3D12CreateDevice")?;
-            func(
-                adapter.as_unknown() as *const _ as *mut _,
+            Direct3D12::D3D12CreateDevice::<_, Device>(
+                &adapter.cast::<IUnknown>().unwrap(),
                 Direct3D11::D3D_FEATURE_LEVEL(feature_level as _),
-                &Direct3D12::ID3D12Device::IID,
-                device.mut_void(),
+                &mut device,
             )
         };
 
-        let hr = runtime::HRESULT(hr);
-        if hr.is_ok() {
-            Ok(Ok(device))
-        } else {
-            Ok(runtime::Result::Err(runtime::Error::new(
-                hr,
-                hr.message().as_str(),
-            )))
+        match hr {
+            Ok(_) => Ok(Ok(device.unwrap())),
+            Err(err) => Ok(runtime::Result::Err(runtime::Error::new(
+                err.code(),
+                err.message().as_str(),
+            ))),
         }
     }
 }
 
-impl Device {
+pub trait IDevice {
     #[cfg(feature = "implicit-link")]
-    pub fn create<I: Interface>(
-        adapter: WeakPtr<I>,
+    fn create<I: Interface>(
+        adapter: I,
+        feature_level: crate::FeatureLevel,
+    ) -> runtime::Result<Device>;
+    fn create_heap(
+        &self,
+        size_in_bytes: u64,
+        properties: HeapProperties,
+        alignment: u64,
+        flags: HeapFlags,
+    ) -> runtime::Result<Heap>;
+    fn create_command_allocator(&self, list_type: CmdListType)
+        -> runtime::Result<CommandAllocator>;
+    fn create_command_queue(
+        &self,
+        list_type: CmdListType,
+        priority: queue::Priority,
+        flags: queue::CommandQueueFlags,
+        node_mask: NodeMask,
+    ) -> runtime::Result<CommandQueue>;
+    fn create_descriptor_heap(
+        &self,
+        num_descriptors: u32,
+        heap_type: DescriptorHeapType,
+        flags: DescriptorHeapFlags,
+        node_mask: NodeMask,
+    ) -> runtime::Result<DescriptorHeap>;
+    fn get_descriptor_increment_size(&self, heap_type: DescriptorHeapType) -> u32;
+    fn create_graphics_command_list(
+        &self,
+        list_type: CmdListType,
+        allocator: CommandAllocator,
+        initial: Option<PipelineState>,
+        node_mask: NodeMask,
+    ) -> runtime::Result<GraphicsCommandList>;
+    fn create_query_heap(
+        &self,
+        heap_ty: query::QueryHeapType,
+        count: u32,
+        node_mask: NodeMask,
+    ) -> runtime::Result<QueryHeap>;
+    fn create_graphics_pipeline_state(
+        &self,
+        _root_signature: RootSignature,
+        _vs: Shader,
+        _ps: Shader,
+        _gs: Shader,
+        _hs: Shader,
+        _ds: Shader,
+        _node_mask: NodeMask,
+        _cached_pso: CachedPSO,
+        _flags: pso::PipelineStateFlags,
+    ) -> runtime::Result<PipelineState>;
+    fn create_compute_pipeline_state(
+        &self,
+        root_signature: Option<RootSignature>,
+        cs: Shader,
+        node_mask: NodeMask,
+        cached_pso: CachedPSO,
+        flags: pso::PipelineStateFlags,
+    ) -> runtime::Result<PipelineState>;
+    fn create_sampler(
+        &self,
+        sampler: CpuDescriptor,
+        filter: Direct3D12::D3D12_FILTER,
+        address_mode: TextureAddressMode,
+        mip_lod_bias: f32,
+        max_anisotropy: u32,
+        comparison_op: Direct3D12::D3D12_COMPARISON_FUNC,
+        border_color: [f32; 4],
+        lod: Range<f32>,
+    );
+    fn create_root_signature(
+        &self,
+        blob: Blob,
+        node_mask: NodeMask,
+    ) -> runtime::Result<RootSignature>;
+    fn create_command_signature(
+        &self,
+        root_signature: Option<RootSignature>,
+        arguments: &mut [IndirectArgument],
+        stride: u32,
+        node_mask: NodeMask,
+    ) -> runtime::Result<CommandSignature>;
+    fn create_render_target_view(
+        &self,
+        resource: Resource,
+        desc: &RenderTargetViewDesc,
+        descriptor: CpuDescriptor,
+    );
+    fn create_fence(&self, initial: u64) -> runtime::Result<Fence>;
+}
+
+impl IDevice for Device {
+    #[cfg(feature = "implicit-link")]
+    fn create<I: Interface>(
+        adapter: I,
         feature_level: crate::FeatureLevel,
     ) -> runtime::Result<Self> {
         let mut device: Option<Device> = None;
         let hr = unsafe {
             Direct3D12::D3D12CreateDevice(
-                adapter.as_unknown(),
+                adapter.cast::<IUnknown>().unwrap(),
                 Direct3D11::D3D_FEATURE_LEVEL(feature_level as _),
                 &mut device,
             )
@@ -72,7 +155,7 @@ impl Device {
         hr.map(|()| device.unwrap())
     }
 
-    pub fn create_heap(
+    fn create_heap(
         &self,
         size_in_bytes: u64,
         properties: HeapProperties,
@@ -89,10 +172,10 @@ impl Device {
         let mut heap: Option<Direct3D12::ID3D12Heap> = None;
         let hr = unsafe { self.CreateHeap(&desc, &mut heap) };
 
-        hr.map(|()| unsafe { WeakPtr::from_raw(&mut heap.unwrap()) })
+        hr.map(|()| heap.unwrap())
     }
 
-    pub fn create_command_allocator(
+    fn create_command_allocator(
         &self,
         list_type: CmdListType,
     ) -> runtime::Result<CommandAllocator> {
@@ -103,7 +186,7 @@ impl Device {
         }
     }
 
-    pub fn create_command_queue(
+    fn create_command_queue(
         &self,
         list_type: CmdListType,
         priority: queue::Priority,
@@ -120,7 +203,7 @@ impl Device {
         unsafe { self.CreateCommandQueue::<CommandQueue>(&desc) }
     }
 
-    pub fn create_descriptor_heap(
+    fn create_descriptor_heap(
         &self,
         num_descriptors: u32,
         heap_type: DescriptorHeapType,
@@ -137,7 +220,7 @@ impl Device {
         unsafe { self.CreateDescriptorHeap::<DescriptorHeap>(&desc) }
     }
 
-    pub fn get_descriptor_increment_size(&self, heap_type: DescriptorHeapType) -> u32 {
+    fn get_descriptor_increment_size(&self, heap_type: DescriptorHeapType) -> u32 {
         unsafe {
             self.GetDescriptorHandleIncrementSize(Direct3D12::D3D12_DESCRIPTOR_HEAP_TYPE(
                 heap_type as _,
@@ -145,11 +228,11 @@ impl Device {
         }
     }
 
-    pub fn create_graphics_command_list(
+    fn create_graphics_command_list(
         &self,
         list_type: CmdListType,
         allocator: CommandAllocator,
-        initial: PipelineState,
+        initial: Option<PipelineState>,
         node_mask: NodeMask,
     ) -> runtime::Result<GraphicsCommandList> {
         unsafe {
@@ -162,7 +245,7 @@ impl Device {
         }
     }
 
-    pub fn create_query_heap(
+    fn create_query_heap(
         &self,
         heap_ty: query::QueryHeapType,
         count: u32,
@@ -180,7 +263,7 @@ impl Device {
         hr.map(|()| query_heap.unwrap())
     }
 
-    pub fn create_graphics_pipeline_state(
+    fn create_graphics_pipeline_state(
         &self,
         _root_signature: RootSignature,
         _vs: Shader,
@@ -195,33 +278,26 @@ impl Device {
         unimplemented!()
     }
 
-    pub fn create_compute_pipeline_state(
+    fn create_compute_pipeline_state(
         &self,
-        root_signature: RootSignature,
+        root_signature: Option<RootSignature>,
         cs: Shader,
         node_mask: NodeMask,
         cached_pso: CachedPSO,
         flags: pso::PipelineStateFlags,
     ) -> runtime::Result<PipelineState> {
-        let desc = unsafe {
-            Direct3D12::D3D12_COMPUTE_PIPELINE_STATE_DESC {
-                pRootSignature: Some(
-                    root_signature
-                        .as_unknown()
-                        .cast::<Direct3D12::ID3D12RootSignature>()
-                        .unwrap(),
-                ),
-                CS: *cs,
-                NodeMask: node_mask,
-                CachedPSO: *cached_pso,
-                Flags: Direct3D12::D3D12_PIPELINE_STATE_FLAGS(flags.bits()),
-            }
+        let desc = Direct3D12::D3D12_COMPUTE_PIPELINE_STATE_DESC {
+            pRootSignature: root_signature,
+            CS: *cs,
+            NodeMask: node_mask,
+            CachedPSO: *cached_pso,
+            Flags: Direct3D12::D3D12_PIPELINE_STATE_FLAGS(flags.bits()),
         };
 
         unsafe { self.CreateComputePipelineState::<PipelineState>(&desc) }
     }
 
-    pub fn create_sampler(
+    fn create_sampler(
         &self,
         sampler: CpuDescriptor,
         filter: Direct3D12::D3D12_FILTER,
@@ -250,7 +326,7 @@ impl Device {
         }
     }
 
-    pub fn create_root_signature(
+    fn create_root_signature(
         &self,
         blob: Blob,
         node_mask: NodeMask,
@@ -264,9 +340,9 @@ impl Device {
         }
     }
 
-    pub fn create_command_signature(
+    fn create_command_signature(
         &self,
-        root_signature: RootSignature,
+        root_signature: Option<RootSignature>,
         arguments: &mut [IndirectArgument],
         stride: u32,
         node_mask: NodeMask,
@@ -290,7 +366,7 @@ impl Device {
         hr.map(|()| signature.unwrap())
     }
 
-    pub fn create_render_target_view(
+    fn create_render_target_view(
         &self,
         resource: Resource,
         desc: &RenderTargetViewDesc,
@@ -302,7 +378,7 @@ impl Device {
     }
 
     // TODO: interface not complete
-    pub fn create_fence(&self, initial: u64) -> runtime::Result<Fence> {
+    fn create_fence(&self, initial: u64) -> runtime::Result<Fence> {
         unsafe { self.CreateFence::<Fence>(initial, Direct3D12::D3D12_FENCE_FLAG_NONE) }
     }
 }

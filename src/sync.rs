@@ -1,4 +1,3 @@
-use crate::com::WeakPtr;
 use std::ptr;
 use windows::Win32::Foundation::HANDLE;
 use windows::Win32::Graphics::Direct3D12;
@@ -19,9 +18,20 @@ impl Event {
     }
 }
 
-pub type Fence = WeakPtr<Direct3D12::ID3D12Fence>;
-impl Fence {
-    pub fn set_event_on_completion(
+pub type Fence = Direct3D12::ID3D12Fence;
+
+pub trait IFence {
+    fn set_event_on_completion(
+        &self,
+        event: Event,
+        value: u64,
+    ) -> Result<(), windows::runtime::Error>;
+    fn get_value(&self) -> u64;
+    fn signal(&self, value: u64) -> Result<(), windows::runtime::Error>;
+}
+
+impl IFence for Fence {
+    fn set_event_on_completion(
         &self,
         event: Event,
         value: u64,
@@ -29,11 +39,11 @@ impl Fence {
         unsafe { self.SetEventOnCompletion(value, event.0) }
     }
 
-    pub fn get_value(&self) -> u64 {
+    fn get_value(&self) -> u64 {
         unsafe { self.GetCompletedValue() }
     }
 
-    pub fn signal(&self, value: u64) -> Result<(), windows::runtime::Error> {
+    fn signal(&self, value: u64) -> Result<(), windows::runtime::Error> {
         unsafe { self.Signal(value) }
     }
 }

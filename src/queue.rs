@@ -1,4 +1,4 @@
-use crate::{com::WeakPtr, sync::Fence, CommandList};
+use crate::{sync::Fence, CommandList};
 use windows::{
     runtime::{self, Interface},
     Win32::Graphics::Direct3D12::{self, ID3D12CommandList},
@@ -17,10 +17,15 @@ bitflags! {
     }
 }
 
-pub type CommandQueue = WeakPtr<Direct3D12::ID3D12CommandQueue>;
+pub trait ICommandQueue {
+    fn execute_command_lists(&self, command_lists: &[CommandList]);
+    fn signal(&self, fence: Fence, value: u64) -> Result<(), runtime::Error>;
+}
 
-impl CommandQueue {
-    pub fn execute_command_lists(&self, command_lists: &[CommandList]) {
+pub type CommandQueue = Direct3D12::ID3D12CommandQueue;
+
+impl ICommandQueue for CommandQueue {
+    fn execute_command_lists(&self, command_lists: &[CommandList]) {
         let command_lists = command_lists
             .iter()
             .map(|c| Some(c.0.cast::<ID3D12CommandList>().expect("Tried to execute command list lists containing objects other than command lists")))
@@ -28,7 +33,7 @@ impl CommandQueue {
         unsafe { self.ExecuteCommandLists(command_lists.len() as _, command_lists.as_ptr()) }
     }
 
-    pub fn signal(&self, fence: Fence, value: u64) -> Result<(), runtime::Error> {
+    fn signal(&self, fence: Fence, value: u64) -> Result<(), runtime::Error> {
         unsafe { self.Signal(fence, value) }
     }
 }

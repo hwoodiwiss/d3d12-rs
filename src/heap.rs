@@ -1,7 +1,6 @@
-use crate::com::WeakPtr;
 use windows::Win32::Graphics::Direct3D12;
 
-pub type Heap = WeakPtr<Direct3D12::ID3D12Heap>;
+pub type Heap = Direct3D12::ID3D12Heap;
 
 #[repr(u32)]
 #[derive(Clone, Copy)]

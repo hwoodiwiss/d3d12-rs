@@ -1,6 +1,6 @@
 //! GPU Resource
 
-use crate::{com::WeakPtr, Rect};
+use crate::Rect;
 use core::ffi;
 use std::{ops::Range, ptr};
 use windows::{runtime, Win32::Graphics::Direct3D12};
@@ -12,11 +12,21 @@ pub struct DiscardRegion<'a> {
     pub subregions: Range<Subresource>,
 }
 
-pub type Resource = WeakPtr<Direct3D12::ID3D12Resource>;
+pub type Resource = Direct3D12::ID3D12Resource;
 
-impl Resource {
+pub trait IResource {
+    fn map(
+        &self,
+        subresource: Subresource,
+        read_range: Option<Range<usize>>,
+    ) -> runtime::Result<*mut ffi::c_void>;
+    fn unmap(&self, subresource: Subresource, write_range: Option<Range<usize>>);
+    fn gpu_virtual_address(&self) -> u64;
+}
+
+impl IResource for Resource {
     ///
-    pub fn map(
+    fn map(
         &self,
         subresource: Subresource,
         read_range: Option<Range<usize>>,
@@ -35,7 +45,7 @@ impl Resource {
         hr.map(|()| ptr)
     }
 
-    pub fn unmap(&self, subresource: Subresource, write_range: Option<Range<usize>>) {
+    fn unmap(&self, subresource: Subresource, write_range: Option<Range<usize>>) {
         let write_range = write_range.map(|r| Direct3D12::D3D12_RANGE {
             Begin: r.start,
             End: r.end,
@@ -48,7 +58,7 @@ impl Resource {
         unsafe { self.Unmap(subresource, write) };
     }
 
-    pub fn gpu_virtual_address(&self) -> u64 {
+    fn gpu_virtual_address(&self) -> u64 {
         unsafe { self.GetGPUVirtualAddress() }
     }
 }

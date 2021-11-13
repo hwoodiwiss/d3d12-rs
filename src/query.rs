@@ -1,4 +1,3 @@
-use crate::com::WeakPtr;
 use windows::Win32::Graphics::Direct3D12;
 
 #[repr(u32)]
@@ -12,4 +11,4 @@ pub enum QueryHeapType {
     // CopyQueueTimestamp = Direct3D12::D3D12__QUERY_HEAP_TYPE_COPY_QUEUE_TIMESTAMP,
 }
 
-pub type QueryHeap = WeakPtr<Direct3D12::ID3D12QueryHeap>;
+pub type QueryHeap = Direct3D12::ID3D12QueryHeap;

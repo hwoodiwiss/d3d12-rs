@@ -1,6 +1,6 @@
 //! Pipeline state
 
-use crate::{com::WeakPtr, Blob, Error};
+use crate::{Blob, Error};
 
 use std::{ops::Deref, ptr};
 use windows::runtime;
@@ -59,7 +59,7 @@ impl Shader {
         target: &str,
         entry: &str,
         flags: ShaderCompileFlags,
-    ) -> runtime::Result<(Blob, Error)> {
+    ) -> runtime::Result<(Option<Blob>, Option<Error>)> {
         let mut shader: Option<Direct3D11::ID3DBlob> = None;
         let mut error: Option<Direct3D11::ID3DBlob> = None;
 
@@ -79,17 +79,7 @@ impl Shader {
             )
         };
 
-        hr.map(|()| {
-            let wk_shader = match shader {
-                Some(mut blob) => unsafe { WeakPtr::from_raw(&mut blob) },
-                None => WeakPtr::<Direct3D11::ID3DBlob>::null(),
-            };
-            let wk_err = match error {
-                Some(mut err) => unsafe { WeakPtr::from_raw(&mut err) },
-                None => WeakPtr::<Direct3D11::ID3DBlob>::null(),
-            };
-            (wk_shader, wk_err)
-        })
+        hr.map(|()| (shader, error))
     }
 }
 
@@ -135,7 +125,7 @@ impl Deref for CachedPSO {
     }
 }
 
-pub type PipelineState = WeakPtr<Direct3D12::ID3D12PipelineState>;
+pub type PipelineState = Direct3D12::ID3D12PipelineState;
 
 #[repr(u32)]
 pub enum Subobject {

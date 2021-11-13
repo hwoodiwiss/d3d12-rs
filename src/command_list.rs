@@ -1,8 +1,8 @@
 //! Graphics command list
 
 use crate::{
-    com::WeakPtr, resource::DiscardRegion, CommandAllocator, CpuDescriptor, DescriptorHeap, Format,
-    GpuAddress, GpuDescriptor, IndexCount, InstanceCount, PipelineState, Rect, Resource, RootIndex,
+    resource::DiscardRegion, CommandAllocator, CpuDescriptor, DescriptorHeap, Format, GpuAddress,
+    GpuDescriptor, IndexCount, InstanceCount, PipelineState, Rect, Resource, RootIndex,
     RootSignature, Subresource, VertexCount, VertexOffset, WorkGroupCount,
 };
 use std::{mem, ptr};
@@ -11,14 +11,11 @@ use windows::{
     Win32::Graphics::Direct3D12::{self},
 };
 
-type D3D12_INDIRECT_ARGUMENT_DESC_VERTEX_BUFFER = Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC_0_4;
-type D3D12_INDIRECT_ARGUMENT_DESC_CONSTANT = Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC_0_1;
-type D3D12_INDIRECT_ARGUMENT_DESC_CONSTANT_BUFFER_VIEW =
-    Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC_0_0;
-type D3D12_INDIRECT_ARGUMENT_DESC_SHADER_RESOURCE_VIEW =
-    Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC_0_2;
-type D3D12_INDIRECT_ARGUMENT_DESC_UNORDERED_ACCESS_VIEW =
-    Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC_0_3;
+type IndirectArgumentDescVertexBuffer = Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC_0_4;
+type IndirectArgumentDescConstant = Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC_0_1;
+type IndirectArgumentDescConstantBufferView = Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC_0_0;
+type IndirectArgumentDescShaderResourceView = Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC_0_2;
+type IndirectArgumentDescUnorderedAccessView = Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC_0_3;
 
 #[repr(u32)]
 #[derive(Clone, Copy)]
@@ -68,7 +65,7 @@ impl IndirectArgument {
             Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_VERTEX_BUFFER_VIEW,
             ..unsafe { mem::zeroed() }
         };
-        desc.Anonymous.VertexBuffer = D3D12_INDIRECT_ARGUMENT_DESC_VERTEX_BUFFER { Slot: slot };
+        desc.Anonymous.VertexBuffer = IndirectArgumentDescVertexBuffer { Slot: slot };
         IndirectArgument(desc)
     }
 
@@ -77,7 +74,7 @@ impl IndirectArgument {
             Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT,
             ..unsafe { mem::zeroed() }
         };
-        desc.Anonymous.Constant = D3D12_INDIRECT_ARGUMENT_DESC_CONSTANT {
+        desc.Anonymous.Constant = IndirectArgumentDescConstant {
             RootParameterIndex: root_index,
             DestOffsetIn32BitValues: dest_offset_words,
             Num32BitValuesToSet: count,
@@ -90,7 +87,7 @@ impl IndirectArgument {
             Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT_BUFFER_VIEW,
             ..unsafe { mem::zeroed() }
         };
-        desc.Anonymous.ConstantBufferView = D3D12_INDIRECT_ARGUMENT_DESC_CONSTANT_BUFFER_VIEW {
+        desc.Anonymous.ConstantBufferView = IndirectArgumentDescConstantBufferView {
             RootParameterIndex: root_index,
         };
         IndirectArgument(desc)
@@ -101,7 +98,7 @@ impl IndirectArgument {
             Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_SHADER_RESOURCE_VIEW,
             ..unsafe { mem::zeroed() }
         };
-        desc.Anonymous.ShaderResourceView = D3D12_INDIRECT_ARGUMENT_DESC_SHADER_RESOURCE_VIEW {
+        desc.Anonymous.ShaderResourceView = IndirectArgumentDescShaderResourceView {
             RootParameterIndex: root_index,
         };
         IndirectArgument(desc)
@@ -112,7 +109,7 @@ impl IndirectArgument {
             Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_UNORDERED_ACCESS_VIEW,
             ..unsafe { mem::zeroed() }
         };
-        desc.Anonymous.UnorderedAccessView = D3D12_INDIRECT_ARGUMENT_DESC_UNORDERED_ACCESS_VIEW {
+        desc.Anonymous.UnorderedAccessView = IndirectArgumentDescUnorderedAccessView {
             RootParameterIndex: root_index,
         };
         IndirectArgument(desc)
@@ -147,28 +144,116 @@ impl ResourceBarrier {
     }
 }
 
-pub type CommandSignature = WeakPtr<Direct3D12::ID3D12CommandSignature>;
-pub type CommandList = WeakPtr<Direct3D12::ID3D12CommandList>;
-pub type GraphicsCommandList = WeakPtr<Direct3D12::ID3D12GraphicsCommandList>;
+pub type CommandSignature = Direct3D12::ID3D12CommandSignature;
+pub type CommandList = Direct3D12::ID3D12CommandList;
 
-impl GraphicsCommandList {
-    pub fn as_list(&self) -> CommandList {
-        unsafe { CommandList::from_raw(self.as_mut_ptr() as *mut _) }
+pub trait IGraphicsCommandList {
+    fn as_list(&self) -> CommandList;
+    fn close(&self) -> Result<(), runtime::Error>;
+    fn reset(
+        &self,
+        allocator: CommandAllocator,
+        initial_pso: Option<PipelineState>,
+    ) -> Result<(), runtime::Error>;
+    fn discard_resource(&self, resource: Resource, region: DiscardRegion);
+    fn clear_depth_stencil_view(
+        &self,
+        dsv: CpuDescriptor,
+        flags: ClearFlags,
+        depth: f32,
+        stencil: u8,
+        rects: &[Rect],
+    );
+    fn clear_render_target_view(&self, rtv: CpuDescriptor, color: [f32; 4], rects: &[Rect]);
+    fn dispatch(&self, count: WorkGroupCount);
+    fn draw(
+        &self,
+        num_vertices: VertexCount,
+        num_instances: InstanceCount,
+        start_vertex: VertexCount,
+        start_instance: InstanceCount,
+    );
+    fn draw_indexed(
+        &self,
+        num_indices: IndexCount,
+        num_instances: InstanceCount,
+        start_index: IndexCount,
+        base_vertex: VertexOffset,
+        start_instance: InstanceCount,
+    );
+    fn set_index_buffer(&self, gpu_address: GpuAddress, size: u32, format: Format);
+    fn set_blend_factor(&self, factor: [f32; 4]);
+    fn set_stencil_reference(&self, reference: u32);
+    fn set_pipeline_state(&self, pso: PipelineState);
+    fn execute_bundle(&self, bundle: GraphicsCommandList);
+    fn set_descriptor_heaps(&self, heaps: &[DescriptorHeap]);
+    fn set_compute_root_signature(&self, signature: RootSignature);
+    fn set_graphics_root_signature(&self, signature: RootSignature);
+    fn set_compute_root_descriptor_table(
+        &self,
+        root_index: RootIndex,
+        base_descriptor: GpuDescriptor,
+    );
+    fn set_compute_root_constant_buffer_view(
+        &self,
+        root_index: RootIndex,
+        buffer_location: GpuAddress,
+    );
+    fn set_compute_root_shader_resource_view(
+        &self,
+        root_index: RootIndex,
+        buffer_location: GpuAddress,
+    );
+    fn set_compute_root_unordered_access_view(
+        &self,
+        root_index: RootIndex,
+        buffer_location: GpuAddress,
+    );
+    fn set_compute_root_constant(&self, root_index: RootIndex, value: u32, dest_offset_words: u32);
+    fn set_graphics_root_descriptor_table(
+        &self,
+        root_index: RootIndex,
+        base_descriptor: GpuDescriptor,
+    );
+    fn set_graphics_root_constant_buffer_view(
+        &self,
+        root_index: RootIndex,
+        buffer_location: GpuAddress,
+    );
+    fn set_graphics_root_shader_resource_view(
+        &self,
+        root_index: RootIndex,
+        buffer_location: GpuAddress,
+    );
+    fn set_graphics_root_unordered_access_view(
+        &self,
+        root_index: RootIndex,
+        buffer_location: GpuAddress,
+    );
+    fn set_graphics_root_constant(&self, root_index: RootIndex, value: u32, dest_offset_words: u32);
+    fn resource_barrier(&self, barriers: &[ResourceBarrier]);
+}
+
+pub type GraphicsCommandList = Direct3D12::ID3D12GraphicsCommandList;
+
+impl IGraphicsCommandList for GraphicsCommandList {
+    fn as_list(&self) -> CommandList {
+        self.cast::<CommandList>().unwrap()
     }
 
-    pub fn close(&self) -> Result<(), runtime::Error> {
+    fn close(&self) -> Result<(), runtime::Error> {
         unsafe { self.Close() }
     }
 
-    pub fn reset(
+    fn reset(
         &self,
         allocator: CommandAllocator,
-        initial_pso: PipelineState,
+        initial_pso: Option<PipelineState>,
     ) -> Result<(), runtime::Error> {
         unsafe { self.Reset(allocator, initial_pso) }
     }
 
-    pub fn discard_resource(&self, resource: Resource, region: DiscardRegion) {
+    fn discard_resource(&self, resource: Resource, region: DiscardRegion) {
         debug_assert!(region.subregions.start < region.subregions.end);
         unsafe {
             let rects = region.rects;
@@ -184,7 +269,7 @@ impl GraphicsCommandList {
         }
     }
 
-    pub fn clear_depth_stencil_view(
+    fn clear_depth_stencil_view(
         &self,
         dsv: CpuDescriptor,
         flags: ClearFlags,
@@ -210,7 +295,7 @@ impl GraphicsCommandList {
         }
     }
 
-    pub fn clear_render_target_view(&self, rtv: CpuDescriptor, color: [f32; 4], rects: &[Rect]) {
+    fn clear_render_target_view(&self, rtv: CpuDescriptor, color: [f32; 4], rects: &[Rect]) {
         let num_rects = rects.len() as _;
         let rects = if num_rects > 0 {
             rects.as_ptr()
@@ -222,13 +307,13 @@ impl GraphicsCommandList {
         }
     }
 
-    pub fn dispatch(&self, count: WorkGroupCount) {
+    fn dispatch(&self, count: WorkGroupCount) {
         unsafe {
             self.Dispatch(count[0], count[1], count[2]);
         }
     }
 
-    pub fn draw(
+    fn draw(
         &self,
         num_vertices: VertexCount,
         num_instances: InstanceCount,
@@ -240,7 +325,7 @@ impl GraphicsCommandList {
         }
     }
 
-    pub fn draw_indexed(
+    fn draw_indexed(
         &self,
         num_indices: IndexCount,
         num_instances: InstanceCount,
@@ -259,7 +344,7 @@ impl GraphicsCommandList {
         }
     }
 
-    pub fn set_index_buffer(&self, gpu_address: GpuAddress, size: u32, format: Format) {
+    fn set_index_buffer(&self, gpu_address: GpuAddress, size: u32, format: Format) {
         let ibv = Direct3D12::D3D12_INDEX_BUFFER_VIEW {
             BufferLocation: gpu_address,
             SizeInBytes: size,
@@ -270,31 +355,31 @@ impl GraphicsCommandList {
         }
     }
 
-    pub fn set_blend_factor(&self, factor: [f32; 4]) {
+    fn set_blend_factor(&self, factor: [f32; 4]) {
         unsafe {
             self.OMSetBlendFactor(factor.as_ptr());
         }
     }
 
-    pub fn set_stencil_reference(&self, reference: u32) {
+    fn set_stencil_reference(&self, reference: u32) {
         unsafe {
             self.OMSetStencilRef(reference);
         }
     }
 
-    pub fn set_pipeline_state(&self, pso: PipelineState) {
+    fn set_pipeline_state(&self, pso: PipelineState) {
         unsafe {
             self.SetPipelineState(pso);
         }
     }
 
-    pub fn execute_bundle(&self, bundle: GraphicsCommandList) {
+    fn execute_bundle(&self, bundle: GraphicsCommandList) {
         unsafe {
             self.ExecuteBundle(bundle);
         }
     }
 
-    pub fn set_descriptor_heaps(&self, heaps: &[DescriptorHeap]) {
+    fn set_descriptor_heaps(&self, heaps: &[DescriptorHeap]) {
         unsafe {
             self.SetDescriptorHeaps(
                 heaps.len() as _,
@@ -303,19 +388,19 @@ impl GraphicsCommandList {
         }
     }
 
-    pub fn set_compute_root_signature(&self, signature: RootSignature) {
+    fn set_compute_root_signature(&self, signature: RootSignature) {
         unsafe {
             self.SetComputeRootSignature(signature);
         }
     }
 
-    pub fn set_graphics_root_signature(&self, signature: RootSignature) {
+    fn set_graphics_root_signature(&self, signature: RootSignature) {
         unsafe {
             self.SetGraphicsRootSignature(signature);
         }
     }
 
-    pub fn set_compute_root_descriptor_table(
+    fn set_compute_root_descriptor_table(
         &self,
         root_index: RootIndex,
         base_descriptor: GpuDescriptor,
@@ -325,7 +410,7 @@ impl GraphicsCommandList {
         }
     }
 
-    pub fn set_compute_root_constant_buffer_view(
+    fn set_compute_root_constant_buffer_view(
         &self,
         root_index: RootIndex,
         buffer_location: GpuAddress,
@@ -335,7 +420,7 @@ impl GraphicsCommandList {
         }
     }
 
-    pub fn set_compute_root_shader_resource_view(
+    fn set_compute_root_shader_resource_view(
         &self,
         root_index: RootIndex,
         buffer_location: GpuAddress,
@@ -345,7 +430,7 @@ impl GraphicsCommandList {
         }
     }
 
-    pub fn set_compute_root_unordered_access_view(
+    fn set_compute_root_unordered_access_view(
         &self,
         root_index: RootIndex,
         buffer_location: GpuAddress,
@@ -355,18 +440,13 @@ impl GraphicsCommandList {
         }
     }
 
-    pub fn set_compute_root_constant(
-        &self,
-        root_index: RootIndex,
-        value: u32,
-        dest_offset_words: u32,
-    ) {
+    fn set_compute_root_constant(&self, root_index: RootIndex, value: u32, dest_offset_words: u32) {
         unsafe {
             self.SetComputeRoot32BitConstant(root_index, value, dest_offset_words);
         }
     }
 
-    pub fn set_graphics_root_descriptor_table(
+    fn set_graphics_root_descriptor_table(
         &self,
         root_index: RootIndex,
         base_descriptor: GpuDescriptor,
@@ -376,7 +456,7 @@ impl GraphicsCommandList {
         }
     }
 
-    pub fn set_graphics_root_constant_buffer_view(
+    fn set_graphics_root_constant_buffer_view(
         &self,
         root_index: RootIndex,
         buffer_location: GpuAddress,
@@ -386,7 +466,7 @@ impl GraphicsCommandList {
         }
     }
 
-    pub fn set_graphics_root_shader_resource_view(
+    fn set_graphics_root_shader_resource_view(
         &self,
         root_index: RootIndex,
         buffer_location: GpuAddress,
@@ -396,7 +476,7 @@ impl GraphicsCommandList {
         }
     }
 
-    pub fn set_graphics_root_unordered_access_view(
+    fn set_graphics_root_unordered_access_view(
         &self,
         root_index: RootIndex,
         buffer_location: GpuAddress,
@@ -406,7 +486,7 @@ impl GraphicsCommandList {
         }
     }
 
-    pub fn set_graphics_root_constant(
+    fn set_graphics_root_constant(
         &self,
         root_index: RootIndex,
         value: u32,
@@ -417,7 +497,7 @@ impl GraphicsCommandList {
         }
     }
 
-    pub fn resource_barrier(&self, barriers: &[ResourceBarrier]) {
+    fn resource_barrier(&self, barriers: &[ResourceBarrier]) {
         unsafe {
             self.ResourceBarrier(barriers.len() as _, barriers.as_ptr() as _) // matches representation
         }

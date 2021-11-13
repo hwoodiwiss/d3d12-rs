@@ -7,7 +7,6 @@ use windows::Win32::Foundation;
 use windows::Win32::Graphics::Dxgi;
 use windows::{Win32::Graphics::Direct3D11, Win32::Graphics::Direct3D12};
 
-mod com;
 mod command_allocator;
 mod command_list;
 mod debug;
@@ -21,7 +20,6 @@ mod queue;
 mod resource;
 mod sync;
 
-pub use crate::com::*;
 pub use crate::command_allocator::*;
 pub use crate::command_list::*;
 pub use crate::debug::*;
@@ -73,12 +71,16 @@ pub enum FeatureLevel {
     L12_1 = Direct3D11::D3D_FEATURE_LEVEL_12_1.0 as u32,
 }
 
-pub type Blob = WeakPtr<Direct3D11::ID3DBlob>;
+pub type Blob = Direct3D11::ID3DBlob;
 
-pub type Error = WeakPtr<Direct3D11::ID3DBlob>;
-impl Error {
-    pub unsafe fn as_c_str(&self) -> &CStr {
-        debug_assert!(!self.is_null());
+pub type Error = Direct3D11::ID3DBlob;
+
+pub trait IError {
+    unsafe fn as_c_str(&self) -> &CStr;
+}
+
+impl IError for Error {
+    unsafe fn as_c_str(&self) -> &CStr {
         let data = self.GetBufferPointer();
         CStr::from_ptr(data as *const _ as *const _)
     }
